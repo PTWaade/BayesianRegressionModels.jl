@@ -1,4 +1,5 @@
 [deps]
+DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 PDMats = "90014a1f-27ba-587c-ab20-58faa44d9150"
