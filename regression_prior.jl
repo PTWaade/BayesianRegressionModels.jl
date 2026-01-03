@@ -844,11 +844,6 @@ end
 
 
 
-
-
-
-
-
 #######################################
 ### EVALUATION: REGRESSION FUNCTION ###
 #######################################
@@ -907,6 +902,7 @@ outcomes = linear_regression(predictors, coefficients)
 ### EVALUATION: TURING MODEL ###
 ################################
 
+#Turing model definition
 @model function m(predictors::RegressionPredictors, priors::RegressionPriors)
 
     # 1. Sample coefficients
@@ -916,8 +912,8 @@ outcomes = linear_regression(predictors, coefficients)
     outcomes = linear_regression(predictors, coefficients)
 
     # 3. Here the likelihood would come
+    # i = to_submodel(custom_likelihood(outcomes))
 
-    return outcomes
 end
 
 model = m(predictors, priors)
