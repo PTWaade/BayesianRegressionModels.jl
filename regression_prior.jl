@@ -4,10 +4,8 @@
 
 #TODO:
 # - A. Core features
-#   - 1. Use nested block indexes so that terms can match across regressions and fixed/random effects
-#       - 1.1 and fix the construction of the Z matrices in the evaluation
-#   - 2. Refactor to using a single multivariate distribution for separate priors
-#   - 3. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
+#   - 1. Refactor to using a single multivariate distribution for separate priors
+#   - 2. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
 # - B. Core Utilities
 #   - 1. Make constructor function for RegressionPrior
 #   - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
@@ -157,7 +155,7 @@ struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,
     #Vector (F random effect factors) of vectors (L random effect levels) of group assignments (1:G)
     random_effect_group_assignments::Tgroups
 
-    #Vector (F random effect factors) of vectors (Q_total random effect terms) of block assignments (1:B)
+    #Vector (R regressions) of vectors (F random effect factors) of vectors (Q_total random effect terms) of block assignments (1:B)
     random_effect_block_assignments::Tblocks
 
     #Vector (F random effect factors) of RandomEffectParameterization enums
@@ -256,13 +254,12 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
         # 4.0 setup
         #Extract information about factor f
         group_assignments_f = specifications.random_effect_group_assignments[At(f)]
-        block_assignments_f = specifications.random_effect_block_assignments[At(f)]
         parameterisation_f = specifications.random_effect_parameterisations[At(f)]
 
         random_effect_block_labels_f = labels.random_effect_blocks[At(f)]
         random_effect_group_labels_f = labels.random_effect_groups[At(f)]
         random_effect_level_labels_f = labels.random_effect_levels[At(f)]
-        random_effect_term_labels_f = dims(block_assignments_f, RandomEffectTermDim)
+        random_effect_term_labels_f = RandomEffectTermDim(vcat([parent(labels.random_effect_terms[At(r)][At(f)]) for r in labels.regressions]...))
 
         #Initialise empty random effects matrix for factor f
         random_effects_f = DimArray(
@@ -276,17 +273,31 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
             # 4.1 Find levels belonging to this group
             random_effect_level_labels_g = random_effect_level_labels_f[group_assignments_f .== g]
 
-            # 4.2 collect priors for the group g across all regressions r
-            sds_g = Float64[]
-            for r in labels.regressions
-                append!(sds_g, parent(random_effect_sds[At(r)][At(f)][At(g)]))
-            end
-
             #Go through every block b
             for b in random_effect_block_labels_f
 
-                # 4.3 identify random effect terms belonging to this block
-                random_effect_term_labels_b = random_effect_term_labels_f[findall(==(b), block_assignments_f)]
+                # 4.2 extract random effect terms and their sds for this block b
+                #Initialise storage
+                random_effect_term_labels_b = []
+                sds_b = Float64[]
+                #For each regression r
+                for r in labels.regressions
+                    #Extract block assignments for this regression and factor
+                    random_effect_block_assignments_f = specifications.random_effect_block_assignments[At(r)][At(f)]
+                    #For each random effect term q
+                    for q in dims(random_effect_block_assignments_f, RandomEffectTermDim)
+                        #If the term belongs to this block
+                        if random_effect_block_assignments_f[At(q)] == b
+                            #Store its label
+                            push!(random_effect_term_labels_b, q)
+                            #Store its standard deviation
+                            push!(sds_b, random_effect_sds[At(r)][At(f)][At(g)][At(q)])
+                        end
+                    end
+                end
+                
+                # 4.3 If there are no terms in this block, skip to next block
+                isempty(random_effect_term_labels_b) && continue
 
                 #For non-centered parameterisations
                 if parameterisation_f == NonCentered
@@ -304,14 +315,10 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
                     # 4.5 extract random effect correlations for this block
                     random_effect_correlations_b = random_effect_correlations[At(f)][At(g)][At(b)]
 
-                    #4.6 Extract random effect standard deviations for this block
-                    # We need the indices relative to the flattened sds_g vector
-                    sds_b = sds_g[findall(==(b), block_assignments_f)]
-
-                    # 4.7 Construct random effect covariances for this block
+                    # 4.6 Construct random effect covariances for this block
                     random_effect_covariances_b = Diagonal(sds_b) * random_effect_correlations_b.L
 
-                    # 4.8 Sample random effects for this block
+                    # 4.7 Sample random effects for this block
                     #Go through each level l
                     for l in random_effect_level_labels_g
                         #Sample random effects for this block (multiply the Cholesky factor with standard normal samples)
@@ -355,20 +362,12 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
         # 3.0 Setup ##
         #Extract information about factor f
         group_assignments_f = specifications.random_effect_group_assignments[At(f)]
-        block_assignments_f = specifications.random_effect_block_assignments[At(f)]
         parameterisation_f = specifications.random_effect_parameterisations[At(f)]
-        random_effect_term_labels_f = dims(block_assignments_f, RandomEffectTermDim)
 
         #Go through every group g
         for g in labels.random_effect_groups[At(f)]
 
-            # 3.1 collect sd priors for this group g across all regressions r
-            sds_g = Float64[]
-            for r in labels.regressions
-                append!(sds_g, parent(x.random_effect_sds[At(r)][At(f)][At(g)]))
-            end
-
-            # 3.2 Identify levels belonging to this group
+            # 3.1 Identify levels belonging to this group
             random_effect_levels_g = labels.random_effect_levels[At(f)][group_assignments_f .== g]
 
             # Go through every correlation block b
@@ -378,23 +377,40 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
                 random_effect_correlations_b = x.random_effect_correlations[At(f)][At(g)][At(b)]
                 logprob += logpdf(d.random_effect_correlations[At(f)][At(g)][At(b)], random_effect_correlations_b)
 
-                # 3.4 identify random effect terms belonging to this block
-                random_effect_term_labels_b = random_effect_term_labels_f[block_assignments_f .== b]
+
+                # 3.4 Extract random effect terms and their sds for this block across all regressions
+                #Initialise storage
+                random_effect_term_labels_b = Symbol[]
+                sds_b = Float64[]
+                #For each regression r
+                for r in labels.regressions
+                    #Extract block assignments for this regression and factor
+                    random_effect_block_assignments_f = specifications.random_effect_block_assignments[At(r)][At(f)]
+                    #For each random effect term q
+                    for q in dims(random_effect_block_assignments_f, RandomEffectTermDim)
+                        #If the term belongs to this block
+                        if random_effect_block_assignments_f[At(q)] == b
+                            #Store its label
+                            push!(random_effect_term_labels_b, q)
+                            #Store its standard deviation
+                            push!(sds_b, x.random_effect_sds[At(r)][At(f)][At(g)][At(q)])
+                        end
+                    end
+                end
+
+                # 3.5 If there are no terms in this block, skip to next block
+                isempty(random_effect_term_labels_b) && continue
 
                 #For non-centered parameterisations
                 if parameterisation_f == NonCentered
 
-                    # 3.5 Extract random effect z-scores for this block and group
+                    # 3.6 Extract random effect z-scores for this block and group
                     z_scores_b = x.random_effects[At(f)][At(parent(random_effect_levels_g)), At(parent(random_effect_term_labels_b))]
 
-                    # 3.6 Add logprobs for random effect z-scores, using a standard normal
+                    # 3.7 Add logprobs for random effect z-scores, using a standard normal
                     logprob += sum(logpdf.(Normal(0, 1), z_scores_b))
 
-                else #for centered parameterisations
-
-                    # 3.7 identify random effect terms belonging to this block
-                    random_effect_term_indices_b = findall(==(b), block_assignments_f)
-                    sds_b = sds_g[random_effect_term_indices_b]
+                elseif parameterisation_f == Centered #for centered parameterisations
 
                     # 3.8 Reconstruct block covariance and random effect distribution
                     L = random_effect_correlations_b.L
@@ -402,12 +418,12 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
                     random_effect_covariances_b = PDMat(Symmetric(Matrix(random_effect_covariances_b + 1e-8 * I)))
                     dist_b = MvNormal(zeros(length(sds_b)), random_effect_covariances_b)
 
-                    # 3.7 Add logprobs for random effects in this block
-                    #Go through each level l in the group g
-                    for l in random_effect_levels_g
-                        #Add logprob of random effects for this level
-                        logprob += logpdf(dist_b, x.random_effects[At(f)][At(l), At(parent(random_effect_term_labels_b))])
-                    end
+                    # 3.9 Add logprobs for random effects in this block
+                    #Extract the random effects for this block [Levels x Terms]
+                    random_effects_b = x.random_effects[At(f)][At(parent(random_effect_levels_g)), At(random_effect_term_labels_b)]
+                    #Add logprobs for all random effects in this block
+                    logprob += sum(logpdf(dist_b, collect(parent(random_effects_b)')))
+
                 end
             end
         end
@@ -456,10 +472,8 @@ function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoeff
             # 2.0 Setup
             #Extract information
             group_assignments_f = specifications.random_effect_group_assignments[At(f)]
-            block_assignments_f = specifications.random_effect_block_assignments[At(f)]
-
             random_effect_level_labels_f = labels.random_effect_levels[At(f)]
-            random_effect_term_labels_f = dims(block_assignments_f, RandomEffectTermDim)
+            random_effect_term_labels_f = RandomEffectTermDim(vcat([parent(labels.random_effect_terms[At(r)][At(f)]) for r in labels.regressions]...))
 
             #Initialise storage for processed random effects
             processed_random_effects_f = DimArray(
@@ -470,22 +484,34 @@ function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoeff
             #Go through every group g
             for g in labels.random_effect_groups[At(f)]
 
-                # 2.1 collect sd priors for this group g across all regressions r
-                sds_g = Float64[]
-                for r in labels.regressions
-                    append!(sds_g, parent(coefficients.random_effect_sds[At(r)][At(f)][At(g)]))
-                end
-
-                # 2.2 Identify levels belonging to this group
+                # 2.1 Identify levels belonging to this group
                 random_effect_levels_g = parent(random_effect_level_labels_f[group_assignments_f .== g])
 
                 #Go through every block b
                 for b in labels.random_effect_blocks[At(f)]
 
-                    # 2.3 Identify terms and SDs for this block
-                    random_effect_term_indices_b = findall(==(b), block_assignments_f)
-                    random_effect_term_labels_b = parent(random_effect_term_labels_f[random_effect_term_indices_b])
-                    sds_b = sds_g[random_effect_term_indices_b]
+                    # 2.2 Identify random effect terms and SDs for this block
+                    #Initialise storage
+                    random_effect_term_labels_b = []
+                    sds_b = Float64[]
+                    #For each regression r
+                    for r in labels.regressions
+                        #Extract block assignments for this regression and factor
+                        random_effect_block_assignments_f = specifications.random_effect_block_assignments[At(r)][At(f)]
+                        #For each random effect term q
+                        for q in dims(random_effect_block_assignments_f, RandomEffectTermDim)
+                            #If the term belongs to this block
+                            if random_effect_block_assignments_f[At(q)] == b
+                                #Store its label
+                                push!(random_effect_term_labels_b, q)
+                                #Store its standard deviation
+                                push!(sds_b, coefficients.random_effect_sds[At(r)][At(f)][At(g)][At(q)])
+                            end
+                        end
+                    end
+
+                    # 2.3 If there are no terms in this block, skip to next block
+                    isempty(random_effect_term_labels_b) && continue
 
                     # 2.4 Reconstruct random effect covariances for this block
                     random_effect_covariances_b = Diagonal(sds_b) * coefficients.random_effect_correlations[At(f)][At(g)][At(b)].L
@@ -519,9 +545,9 @@ regression_labels = RegressionDim([:Regression1, :Regression2])
 #Names for the fixed effect terms in each regression
 fixed_effect_term_labels = DimArray([
         #Regression 1
-        FixedEffectTermDim([:r1_Term1, :r1_Term2, :r1_Term3]),
+        FixedEffectTermDim([:Term1, :Term2, :Term3]),
         #Regression 2
-        FixedEffectTermDim([:r2_Term1, :r2_Term2, :r2_Term3, :r2_Term4, :r2_Term5])
+        FixedEffectTermDim([:Term1, :Term2, :Term3, :Term4, :Term5])
     ], regression_labels)
 
 #Names for the random effect factors
@@ -532,14 +558,14 @@ random_effect_term_labels = DimArray([
         #Regression 1
         DimArray([
                 #Factor 1
-                RandomEffectTermDim([:r1_f1_Term1, :r1_f1_Term2]),
+                RandomEffectTermDim([:Term1, :Term2]),
                 #Factor 2
-                RandomEffectTermDim([:r1_f2_Term1])
+                RandomEffectTermDim([:Term1])
             ], random_effect_factor_labels),
         #Regression 2
         DimArray([
                 #Factor 1
-                RandomEffectTermDim([:r2_f1_Term1, :r2_f1_Term2, :r2_f1_Term3]),
+                RandomEffectTermDim([:Term1, :Term2, :Term3]),
                 #Factor 2
                 RandomEffectTermDim([])
             ], random_effect_factor_labels)
@@ -584,21 +610,19 @@ r1_sds = DimArray([
     #Factor 1, with 2 terms
     DimArray([
         # Group 1
-        DimArray([Gamma(2, 0.1), Gamma(2, 0.1)], random_effect_term_labels[At(:Regression1)][At(:SubjectFactor)]),
+        DimArray([Gamma(2, 0.1), Gamma(2, 0.1)], random_effect_term_labels[At(regression_labels[1])][At(random_effect_factor_labels[1])]),
         # Group 2
-        DimArray([Gamma(2, 0.5), Gamma(2, 0.5)], random_effect_term_labels[At(:Regression1)][At(:SubjectFactor)]),
+        DimArray([Gamma(2, 0.5), Gamma(2, 0.5)], random_effect_term_labels[At(regression_labels[1])][At(random_effect_factor_labels[1])]),
 
-    ], random_effect_group_labels[At(:SubjectFactor)]),
-
+    ], random_effect_group_labels[At(random_effect_factor_labels[1])]),
     #Factor 2, with 1 term
     DimArray([
 
         # Group 1
-        DimArray([Gamma(2, 0.1)], random_effect_term_labels[At(:Regression1)][At(:ItemFactor)]),
+        DimArray([Gamma(2, 0.1)], random_effect_term_labels[At(regression_labels[1])][At(random_effect_factor_labels[2])]),
 
-    ], random_effect_group_labels[At(:ItemFactor)]),
+    ], random_effect_group_labels[At(random_effect_factor_labels[2])]),
 ], random_effect_factor_labels)
-
 
 ## Regression 2 ##
 # 5 fixed effect terms P
@@ -616,19 +640,18 @@ r2_sds = DimArray([
     DimArray([
         
         # Group 1
-        DimArray([Gamma(2, 0.1), Gamma(2, 0.1), Gamma(2, 0.1)], random_effect_term_labels[At(:Regression2)][At(:SubjectFactor)]),
+        DimArray([Gamma(2, 0.1), Gamma(2, 0.1), Gamma(2, 0.1)], random_effect_term_labels[At(regression_labels[2])][At(random_effect_factor_labels[1])]),
         # Group 2
-        DimArray([Gamma(2, 0.5), Gamma(2, 0.5), Gamma(2, 0.1)], random_effect_term_labels[At(:Regression2)][At(:SubjectFactor)]),
+        DimArray([Gamma(2, 0.5), Gamma(2, 0.5), Gamma(2, 0.1)], random_effect_term_labels[At(regression_labels[2])][At(random_effect_factor_labels[1])]),
 
-    ], random_effect_group_labels[At(:SubjectFactor)]),
-
+    ], random_effect_group_labels[At(random_effect_factor_labels[1])]),
     #Factor 2, with 0 terms (not used in the regression)
     DimArray([
 
         # Group 1
-        DimArray(Gamma{Float64}[], random_effect_term_labels[At(:Regression2)][At(:ItemFactor)]),
+        DimArray(Gamma{Float64}[], random_effect_term_labels[At(regression_labels[2])][At(random_effect_factor_labels[2])]),
 
-    ], random_effect_group_labels[At(:ItemFactor)]),
+    ], random_effect_group_labels[At(random_effect_factor_labels[2])]),
 
 ], random_effect_factor_labels)
 
@@ -636,16 +659,6 @@ r2_sds = DimArray([
 ## Random effect correlation priors ##
 #Factor 1: 2 groups, 5 total terms across regressions (Reg 1: 2, Reg 2: 3). Block 1 has terms 1-2, block 2 has terms 3-5.
 #Factor 2: 1 group, 1 total term across regressions (Reg 1: 1, Reg 2: 0). Block 1 has has term 1.
-
-#Gather all random effect terms for factor 1 in a flattened vector
-f1_random_effect_term_labels = RandomEffectTermDim([
-    q
-    for r in regression_labels
-    for q in random_effect_term_labels[At(r)][At(random_effect_factor_labels[1])]
-])
-
-#Specify block assignments for each term in factor 1
-f1_blocks = DimArray([:f1_Block1, :f1_Block1, :f1_Block2, :f1_Block2, :f1_Block2], f1_random_effect_term_labels)
 
 f1_cor_priors = DimArray([
     #Group 1
@@ -694,6 +707,31 @@ group_assignments = DimArray([
     DimArray([:f2_AllItemsGroup, :f2_AllItemsGroup, :f2_AllItemsGroup], random_effect_level_labels[At(random_effect_factor_labels[2])])
 ], random_effect_factor_labels)
 
+## Random effect term block assignments ##
+# Regression 1
+#  - Factor 1: Terms 1 and 2 in Block 1
+#  - Factor 2: Term 1 in Block 1
+# Regression 2
+#  - Factor 1: Terms 1, 2, and 3 in Block 2
+#  - Factor 2: Not used
+block_assignments = DimArray([
+    # Regression 1
+    DimArray([
+        # Factor 1: Subject. Term 1 and 2 in Block 1
+        DimArray([:f1_Block1, :f1_Block1], random_effect_term_labels[At(:Regression1)][At(:SubjectFactor)]),
+        # Factor 2: Item. Term 1 in Block 1
+        DimArray([:f2_Block1], random_effect_term_labels[At(:Regression1)][At(:ItemFactor)])
+    ], random_effect_factor_labels),
+
+    # Regression 2
+    DimArray([
+        # Factor 1: Subject. Term 1, 2, 3 in Block 2
+        DimArray([:f1_Block2, :f1_Block2, :f1_Block2], random_effect_term_labels[At(:Regression2)][At(:SubjectFactor)]),
+        # Factor 2: Item. Not used
+        DimArray(Symbol[], random_effect_term_labels[At(:Regression2)][At(:ItemFactor)])
+    ], random_effect_factor_labels)
+], regression_labels)
+
 ## Random effect parameterisations ##
 # Factor 1: Non-centered
 # Factor 2: Centered
@@ -705,7 +743,6 @@ random_effect_parameterisations = DimArray([
 ], random_effect_factor_labels)
 
 #Final structuring of information
-block_assignments = DimArray([f1_blocks, f2_blocks], random_effect_factor_labels)
 fixed_effect_priors = DimArray([r1_fixed, r2_fixed], regression_labels)
 random_effect_sd_priors = DimArray([r1_sds, r2_sds], regression_labels)
 correlation_priors = DimArray([f1_cor_priors, f2_cor_priors], random_effect_factor_labels)
@@ -784,19 +821,17 @@ function linear_regression(predictors::Tpredictors, coefficients::Tcoefficients)
             # 3. Extract labels for of random effect terms for this regression r and factor f
             random_effect_term_labels_f = labels.random_effect_terms[At(r)][At(f)]
 
-            # If there are no random effect terms for this regression and factor, skip to next factor
-            if isempty(random_effect_term_labels_f)
-                continue
-            end
+            # 4. If there are no random effect terms for this regression and factor, skip to next factor
+            isempty(random_effect_term_labels_f) && continue
 
-            # 4. Extract random effects for this factor f and these levels l
+            # 5. Extract random effects for this factor f and these levels l
             random_effect_level_labels_f = predictors.level_labels[At(r)][At(f)]
             random_effects_l = random_effects[At(f)][At(parent(random_effect_level_labels_f)), At(parent(random_effect_term_labels_f))]
 
-            # 5. Extract random effect design matrix for this regression r and factor f
+            # 6. Extract random effect design matrix for this regression r and factor f
             random_effect_design_matrix_f = predictors.random_effect_design_matrices[At(r)][At(f)]
 
-            # 6. Multiply random effect design matrix with random effects
+            # 7. Multiply random effect design matrix with random effects
             outcomes_r .+= sum(parent(random_effect_design_matrix_f) .* parent(random_effects_l), dims=2)
         end
 
@@ -867,7 +902,6 @@ predictors = RegressionPredictors(fixed_effect_design_matrices, random_effect_de
 coefficients = rand(priors)
 
 outcomes = linear_regression(predictors, coefficients)
-
 
 ################################
 ### EVALUATION: TURING MODEL ###
