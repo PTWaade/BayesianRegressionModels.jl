@@ -5,7 +5,12 @@
 #TODO:
 # - A. Core features
 #   - 1. Refactor to using a single multivariate distribution for separate priors
-#   - 2. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
+#   - 2. Allow for adding terms to the regression inside the Turing model
+#      A. Make linear_regression function for single regression, so that columns can be added between calls
+#      B. Make add_term! function for adding terms to the RegressionPredictors
+#   - 3. Allow for generating level assignments for random effects inside the Turing model
+#     A. Make the RegressionPriorand its functions modular, so that one part samples hyperparameters, and another part samples random effects from the hyperparameters and provided level assignments
+#   - 4. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
 # - B. Core Utilities
 #   - 1. Make constructor function for RegressionPrior
 #   - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
@@ -13,29 +18,30 @@
 #   - 4. Make sectioning method for being able to interact with sets of coefficients at a time
 #   - 5. Allow for passing "nothing" instead of a LKJCholesky prior to specify that random effects in this block are uncorrelated
 # - C. Fixes
-#   - 1. Allow for different functional forms of priors? Remove type requirement in RegressionPrior, make check in constructor
-#   - 2. Add comments with canonical mathematical notation
-#   - 3. Change naming of Cholesky factor
-#   - 4. Allow empty fixed effects
-# - D. Functionality
+#   - 1. Add comments with canonical mathematical notation
+#   - 2. Change naming of Cholesky factor
+#   - 3. Allow empty fixed effects
+#   - 4. Set full type requirements for structs
+# - D. Optimisation
+#   - 1. Minimise use of DimensionalData where not needed
+#   - 2. Ensure type stability
+#   - 3. Pre-allocate extractions from sd vector
+# - E. Functionality
 #   - 1. unit tests
-#   - 2. optimisation
-#   - 3. type stability
-#   - 3. documentation
-# - E. Usage
+#   - 2. documentation
+# - F. Usage
 #   - 1. Fit the example Turing model with FlexiChains
 #   - 2. Make example with Horseshoe priors.
 #   - 3. Make example with Spike-and-slab priors.
-# - F. Near future features
+#   - 4. Make example with latent mixture models with random effect factor level values or group assignments being latent variables
+# - G. Near future features
 #   - 1. Allow for discrete priors on fixed effects (e.g., spike-and-slab)
 #   - 2. Allow for sharing parameters across regressions (e.g., fixed effects beign identical in multiple regressions)
 #   - 3. Make constructor for combining multivariate distributions so that they sample vectors
 #   - 4. add labels for categorical predictors
-# - G. Long Future features
-#   - 1. Hierarchical group means
-#   - 2. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
-#   - 3. Latent mixture models with random effect factor level values or group assignments being latent variables
-#   - 4. Variance Component Analysis - letting random effect sd priors come from a multivariate distribution which can weigh between them. Would probably need to be all random effects from one big distribution.
+# - H. Long Future features
+#   - 1. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
+#   - 2. Variance Component Analysis - letting random effect sd priors come from a multivariate distribution which can weigh between them. Would probably need to be all random effects from one big distribution.
 
 ### TERMINOLOGY ###
 # - Regression (r): A single regression model. Multiple can be connected.
@@ -45,7 +51,7 @@
 # - Random effect groups (g): Sub-partitioning levels of a factor (Strata) for independent random effect variances and random effects (e.g., healthy vs. clinical). brms syntax: (1 | gr(subjID, by = diagnosis))
 # - Random effect terms (q): The variables that vary across a factor (e.g., Intercept, Age, Gender). Is often collapsed across regressions to q_total.
 # - Random effect blocks (b): Sets of random effect terms that are internally correlated (e.g., Intercept, Age, Gender). Blocks can be across regressions. brms syntax: (1 + age |p| subjID)
-# - observations (n): Each row in the data frame
+# - Observations (n): Each row in the data frame
 
 ### FUNCTIONALITY ###
 # - multiple fixed effect terms (intercept and multiple predictors)
@@ -57,14 +63,13 @@
 # - can use centered and non-centered parameterisations for random effects, on a per-factor basis
 
 ### CONSTRAINTS ###
-# - random effect groups g must be applied across all regressions r 
-# - random effect levels l can only belong to a single group g within a factor f
-# - there must be entries for each group in each factor for each regression. If a regression does not use a given factor, pass an empty vector instead of a vector with priors for each term.
-# - priors must be independent across terms
-# - random effect correlations must be specified for all terms across regressions but within a group and within a factor
-# - I've made a hard assumption that the covariance matrieces use a LKJCholesky prior, and not a LKJ for example.
+# - Random effect groups g must be applied across all regressions r 
+# - Random effect levels l can only belong to a single group g within a factor f
+# - There must be entries for each group in each factor for each regression. If a regression does not use a given factor, pass an empty vector instead of a vector with priors for each term.
+# - Random effect correlations must be specified for all terms across regressions but within a group and within a factor
+# - I've made a hard assumption that the covariance matrices use a LKJCholesky prior, and not a LKJ for example.
 # - We do not allow random effect blocks to be different within different random effect groups. Implementationally this would get difficult.
-# - The priors over the fixed effects is a multivariate distribution. If there is only a single fied effect, this must still be a multivariate distribution, such as a one-dimensional MvNormal.
+# - The priors over the fixed effects is a multivariate distribution. If there is only a single fixed effect, this must still be a multivariate distribution, such as a one-dimensional MvNormal.
 # - One perhaps actually limiting constraint is that random effect factor variables must be known at prior construction time, so they cannot be generated during the model. This precludes latent grouping values and infinite mixture models. These can still be created by hand-specifying only that part in Turing, but this won't allow for random effect correlations between these two steps. brms also cannot do this, however.
 
 ### POINTS OF UNCERTAINTY ###
