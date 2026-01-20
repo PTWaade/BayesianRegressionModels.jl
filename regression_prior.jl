@@ -5,7 +5,6 @@
 #TODO:
 # - A. Core features
 #   - 2. Allow for adding terms to the regression inside the Turing model
-#      A. Make linear_regression function for single regression, so that columns can be added between calls
 #      B. Make add_term! function for adding terms to the RegressionPredictors
 #   - 3. Allow for generating level assignments for random effects inside the Turing model
 #      A. Make the RegressionPrior and its functions modular, so that one part samples hyperparameters, and another part samples random effects from the hyperparameters and provided level assignments
@@ -915,12 +914,47 @@ struct RegressionPredictors{Tfixedeffects<:DimArray, Trandomeffects<:DimArray, T
 
     #Vector (R regressions) of vectors (F factors) of vectors (N observations) of level labels
     #Mapping each observation to its random effect level (e.g., Subject 1, Item 2)
-    level_labels::Tlevels
+    random_effect_level_assignments::Tlevels
 end
 
 ### REGRESSION FUNCTION ###
-## Function for combining predictor data and coefficients to calculate outcomes ##
-function linear_regression(predictors::Tpredictors, coefficients::Tcoefficients) where {Tpredictors<:RegressionPredictors,Tcoefficients<:RegressionCoefficients}
+
+
+## 1. Function for calculating outcomes for a single regression ##
+function linear_prediction(fixed_effects, random_effects, fixed_effect_design_matrix, random_effect_design_matrices, random_effect_level_assignments, random_effect_term_labels)
+
+    # 1. Extract labels for the observations in this regression
+    observation_labels = dims(fixed_effect_design_matrix, ObservationDim)
+
+    # 2. Multiply the fixed effect design matrix with the fixed effects
+    outcomes = parent(fixed_effect_design_matrix) * parent(fixed_effects)
+
+    #Go through each factor
+    for f in labels.random_effect_factors
+
+        # 3. Extract labels for of random effect terms for this factor f
+        random_effect_term_labels_f = random_effect_term_labels[At(f)]
+
+        # 4. If there are no random effect terms for this factor, skip to next factor
+        isempty(random_effect_term_labels_f) && continue
+
+        # 5. Extract random effects for this factor f and these levels l
+        random_effect_level_assignments_f = random_effect_level_assignments[At(f)]
+        random_effects_l = random_effects[At(f)][At(parent(random_effect_level_assignments_f)), At(parent(random_effect_term_labels_f))]
+
+        # 6. Extract random effect design matrix for this regression r and factor f
+        random_effect_design_matrix_f = random_effect_design_matrices[At(f)]
+
+        # 7. Multiply random effect design matrix with random effects
+        outcomes .+= sum(parent(random_effect_design_matrix_f) .* parent(random_effects_l), dims=2)
+    end
+
+    return DimArray(vec(outcomes), observation_labels)
+
+end
+
+## 2. High-level unction for calculating outcomes across a set of regressions ##
+function linear_prediction(predictors::Tpredictors, coefficients::Tcoefficients) where {Tpredictors<:RegressionPredictors,Tcoefficients<:RegressionCoefficients}
 
     ## 0. Setup ##
     #Extract information
@@ -933,44 +967,18 @@ function linear_regression(predictors::Tpredictors, coefficients::Tcoefficients)
     #Vector (F factors) of matrices (J random effect levels, Q_total random effect terms)
     random_effects = get_random_effects(coefficients)
 
-    #Initialise storage for regression outcomes (vector over R regressions, each with N outcomes)
-    outcomes = DimArray(
-        Vector{DimArray{Float64, 1}}(undef, length(labels.regressions)), 
-        labels.regressions
-    )
-
-    #Go through each regression
-    for r in labels.regressions
-
-        # 1. Extract labels for the observations in this regression
-        observation_labels_r = dims(predictors.fixed_effect_design_matrices[At(r)], ObservationDim)
-
-        # 2. Multiply the fixed effect design matrix with the fixed effects
-        outcomes_r = parent(predictors.fixed_effect_design_matrices[At(r)]) * parent(fixed_effects[At(r)])
-
-        #Go through each factor
-        for f in labels.random_effect_factors
-
-            # 3. Extract labels for of random effect terms for this regression r and factor f
-            random_effect_term_labels_f = labels.random_effect_terms[At(r)][At(f)]
-
-            # 4. If there are no random effect terms for this regression and factor, skip to next factor
-            isempty(random_effect_term_labels_f) && continue
-
-            # 5. Extract random effects for this factor f and these levels l
-            random_effect_level_labels_f = predictors.level_labels[At(r)][At(f)]
-            random_effects_l = random_effects[At(f)][At(parent(random_effect_level_labels_f)), At(parent(random_effect_term_labels_f))]
-
-            # 6. Extract random effect design matrix for this regression r and factor f
-            random_effect_design_matrix_f = predictors.random_effect_design_matrices[At(r)][At(f)]
-
-            # 7. Multiply random effect design matrix with random effects
-            outcomes_r .+= sum(parent(random_effect_design_matrix_f) .* parent(random_effects_l), dims=2)
-        end
-
-        #Store outcomes for this regression
-        outcomes[At(r)] = DimArray(vec(outcomes_r), observation_labels_r)
-    end
+    #Calculate the linear predictions for each regression
+    outcomes = DimArray([
+        linear_prediction(
+            fixed_effects[At(r)], 
+            random_effects, 
+            predictors.fixed_effect_design_matrices[At(r)], 
+            predictors.random_effect_design_matrices[At(r)], 
+            predictors.random_effect_level_assignments[At(r)], 
+            labels.random_effect_terms[At(r)]
+        )
+        for r in labels.regressions
+    ], labels.regressions)
 
     return outcomes
 end
@@ -989,7 +997,7 @@ N = 12
 
 
 subj_idx = repeat([:Subj1, :Subj2, :Subj3, :Subj4], inner=3)  # [1,1,1, 2,2,2, 3,3,3, 4,4,4]
-item_idx = repeat([:Item1, :Item2, :Item3], outer=4)  # [1,2,3, 1,2,3, 1,2,3, 1,2,3]
+item_idx = repeat([:Item1, :Item2, :Item3], outer=4)          # [1,2,3, 1,2,3, 1,2,3, 1,2,3]
 
 # 2. Regression 1 Data (3 Fixed Effects)
 # X1: Intercept + 2 Predictors
@@ -1029,7 +1037,7 @@ predictors = RegressionPredictors(fixed_effect_design_matrices, random_effect_de
 
 coefficients = rand(priors)
 
-outcomes = linear_regression(predictors, coefficients)
+outcomes = linear_prediction(predictors, coefficients)
 
 ################################
 ### EVALUATION: TURING MODEL ###
@@ -1042,7 +1050,7 @@ outcomes = linear_regression(predictors, coefficients)
     coefficients ~ priors
 
     # 2. Calculate outcomes
-    outcomes = linear_regression(predictors, coefficients)
+    outcomes = linear_prediction(predictors, coefficients)
 
     # 3. Here the likelihood would come
     # i = to_submodel(custom_likelihood(outcomes))
