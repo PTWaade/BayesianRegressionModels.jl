@@ -4,28 +4,29 @@
 
 #TODO:
 # - A. Core features
-#   - 1. Refactor to using a single multivariate distribution for separate priors
 #   - 2. Allow for adding terms to the regression inside the Turing model
 #      A. Make linear_regression function for single regression, so that columns can be added between calls
 #      B. Make add_term! function for adding terms to the RegressionPredictors
 #   - 3. Allow for generating level assignments for random effects inside the Turing model
-#     A. Make the RegressionPriorand its functions modular, so that one part samples hyperparameters, and another part samples random effects from the hyperparameters and provided level assignments
-#   - 4. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
-# - B. Core Utilities
+#      A. Make the RegressionPrior and its functions modular, so that one part samples hyperparameters, and another part samples random effects from the hyperparameters and provided level assignments
+#   - 4. Allow for passing "nothing" instead of a LKJCholesky prior to specify that random effects in this block are uncorrelated
+#   - 5. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
+# - B. Optimisation
+#   - 1. Minimise use of DimensionalData where not needed
+#   - 2. Ensure type stability
+#   - 3. Pre-allocate random effect block assignments
+# - C. Core Utilities
 #   - 1. Make constructor function for RegressionPrior
+#      A. Which construct multivariate distributions form individual priors_f
+#      B. Which creates default priors or extrapolates single priors to full structure
+#      C. Which checks that the inputs are all properly structured and matching
 #   - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
 #   - 3. Make custom plotting functions (FlexiChains & MCMCChains)
-#   - 4. Make sectioning method for being able to interact with sets of coefficients at a time
-#   - 5. Allow for passing "nothing" instead of a LKJCholesky prior to specify that random effects in this block are uncorrelated
-# - C. Fixes
+# - D. Fixes
 #   - 1. Add comments with canonical mathematical notation
 #   - 2. Change naming of Cholesky factor
 #   - 3. Allow empty fixed effects
 #   - 4. Set full type requirements for structs
-# - D. Optimisation
-#   - 1. Minimise use of DimensionalData where not needed
-#   - 2. Ensure type stability
-#   - 3. Pre-allocate extractions from sd vector
 # - E. Functionality
 #   - 1. unit tests
 #   - 2. documentation
@@ -39,7 +40,10 @@
 #   - 2. Allow for sharing parameters across regressions (e.g., fixed effects beign identical in multiple regressions)
 #   - 3. Make constructor for combining multivariate distributions so that they sample vectors
 #   - 4. add labels for categorical predictors
-# - H. Long Future features
+# - H. Extra
+#   - 1. Make Turing submodel alternative to rand and logpdf (and benchmark)
+#   - 2. Decide whether to store fixed effect and random effect sds as DimArrays or flat vectors internally
+# - I. Long Future features
 #   - 1. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
 #   - 2. Variance Component Analysis - letting random effect sd priors come from a multivariate distribution which can weigh between them. Would probably need to be all random effects from one big distribution.
 
@@ -65,18 +69,14 @@
 ### CONSTRAINTS ###
 # - Random effect groups g must be applied across all regressions r 
 # - Random effect levels l can only belong to a single group g within a factor f
-# - There must be entries for each group in each factor for each regression. If a regression does not use a given factor, pass an empty vector instead of a vector with priors for each term.
+# - There must be entries for each group in each factor for each regression. If a regression does not use a given factor, pass an empty vector instead of a vector with labels/priors for each term.
 # - Random effect correlations must be specified for all terms across regressions but within a group and within a factor
 # - I've made a hard assumption that the covariance matrices use a LKJCholesky prior, and not a LKJ for example.
 # - We do not allow random effect blocks to be different within different random effect groups. Implementationally this would get difficult.
-# - The priors over the fixed effects is a multivariate distribution. If there is only a single fixed effect, this must still be a multivariate distribution, such as a one-dimensional MvNormal.
-# - One perhaps actually limiting constraint is that random effect factor variables must be known at prior construction time, so they cannot be generated during the model. This precludes latent grouping values and infinite mixture models. These can still be created by hand-specifying only that part in Turing, but this won't allow for random effect correlations between these two steps. brms also cannot do this, however.
+# - The priors over the fixed effects and random effect sds are multivariate distributions. If there is only a single fixed effect, this must still be a multivariate distribution, such as a one-dimensional MvNormal.
 
 ### POINTS OF UNCERTAINTY ###
-# - currenty, the typing of RegressionPrior only accepts vectors where all distributions are of the same type (concrete and fast),
-#   or where the user has manually specified the vector type to be of the abstract distribution type (flexible but slow). 
-#   Solutions: 1. use Tuples instead (always concrete, but less convenient), 2. do not constrain type parameters (less safe, but more convenient).
-# - adding the eps() jitter to the covariance matrices when reconstructing them for logpdf calculations. Is this done right? How large should it be?
+# - adding the jitter to the covariance matrices when reconstructing them for logpdf calculations. Is this done right? How large should it be?
 
 ### DIFFERENCES TO brms ###
 # - instead of the gr() syntax for grouping random effects, the grouping should perhaps be passed as a separate argument.
@@ -155,7 +155,7 @@ end
 
 
 ## 2. Specifications struct, containing information about the model ##
-struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,Tparameterisations<:AbstractVector}
+struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,Tparameterisations<:AbstractVector, Tfixed_effects<:AbstractVector,Trandom_effect_sds<:AbstractVector, Trandom_effect_sds_blocks<:AbstractVector}
 
     #Vector (F random effect factors) of vectors (L random effect levels) of group assignments (1:G)
     random_effect_group_assignments::Tgroups
@@ -166,18 +166,28 @@ struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,
     #Vector (F random effect factors) of RandomEffectParameterization enums
     random_effect_parameterisations::Tparameterisations
 
+
+    #Mapping from flat vector of fixed effect coefficients to its structured format
+    fixed_effect_indices::Tfixed_effects
+
+    #Mapping from flat vector of random effect SDs to its structured format
+    random_effect_sds_indices::Trandom_effect_sds
+
+    #Mapping from flat vector of random effect SDs to memberships in each random effect block
+    random_effect_sds_block_indices::Trandom_effect_sds_blocks
+
     #Labels for components of the regression
     labels::RegressionLabels
 
 end
 
 ## 3. Prior struct, distribution that coefficients can be sampled from ##
-struct RegressionPriors{Tfixed<:AbstractVector,Tsds<:AbstractVector,Tcorrs<:AbstractVector,Tspecs<:RegressionSpecifications} <: ContinuousMultivariateDistribution
+struct RegressionPriors{Tfixed<:MultivariateDistribution,Tsds<:MultivariateDistribution,Tcorrs<:AbstractVector,Tspecs<:RegressionSpecifications} <: ContinuousMultivariateDistribution
 
-    #Vector (R regressions) of multivariate priors (across P fixed effect terms)
+    #Multivariate distribution flattened from vector (R regressions) of multivariate priors (across P fixed effect terms)
     fixed_effects::Tfixed
 
-    #Vector (R regressions) of vectors (F Random effect factors) of vectors (G random effect groups) of vectors (Q random effect terms)
+    #Multivariate distribution flattened from vector (R regressions) of vectors (F Random effect factors) of vectors (G random effect groups) of vectors (Q random effect terms)
     random_effect_sds::Tsds
 
     #Vector (F random effect factors) of vectors (G random effect groups) of vectors (B random effect blocks) of LKJCholesky correlation priors
@@ -190,11 +200,11 @@ end
 ## 4. Coefficients struct ##
 struct RegressionCoefficients{Tfixed<:AbstractVector,Tsds<:AbstractVector,Tcorrs<:AbstractVector,Tranef<:AbstractVector, Tspecs<:RegressionSpecifications}
 
-    #Vector (R regressions) of vectors (P fixed effect terms)
-    fixed_effects::Tfixed
+    #Vector (R regressions) of vectors (P fixed effect terms) - flattened to a single vector
+    fixed_effects_flat::Tfixed
 
-    #Vector (R regressions) of vectors (F random effect factors) of vectors (G random effect groups) of vectors (Q random effect terms)
-    random_effect_sds::Tsds
+    #Vector (R regressions) of vectors (F random effect factors) of vectors (G random effect groups) of vectors (Q random effect terms) - flattened to a single vector
+    random_effect_sds_flat::Tsds
 
     #Vector (F random effect factors) of vectors (G random effect groups) of vectors (B random effect blocks) of Cholesky correlations (Q_total random effect terms, Q_total random effect terms)
     random_effect_correlations::Tcorrs
@@ -207,8 +217,6 @@ struct RegressionCoefficients{Tfixed<:AbstractVector,Tsds<:AbstractVector,Tcorrs
     specifications::Tspecs
 end
 
-
-
 ### DISTRIBUTION FUNCTIONS ###
 
 ## 1. Sampling function ##
@@ -219,23 +227,10 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
     labels = specifications.labels
 
     ## 1. Sample all fixed effects p for each regression r ##
-    fixed_effects = DimArray([
-            DimArray(rand(rng, d.fixed_effects[At(r)]), labels.fixed_effect_terms[At(r)])
-            for r in labels.regressions
-        ], labels.regressions)
-
+    fixed_effects_flat = rand(rng, d.fixed_effects)
+    
     ## 2. Sample random effect standard deviations for each term q in each group g per factor f in regression r ##
-    random_effect_sds = DimArray([
-            DimArray([
-                    DimArray([
-                            DimArray(
-                                [rand(rng, sd_prior) for sd_prior in d.random_effect_sds[At(r)][At(f)][At(g)]],
-                                labels.random_effect_terms[At(r)][At(f)]
-                            )
-                            for g in labels.random_effect_groups[At(f)]
-                        ], labels.random_effect_groups[At(f)]) for f in labels.random_effect_factors
-                ], labels.random_effect_factors) for r in labels.regressions
-        ], labels.regressions)
+    random_effect_sds_flat = rand(rng, d.random_effect_sds)
 
     ## 3. Sample the random effect correlations ## 
     random_effect_correlations = DimArray([
@@ -281,10 +276,9 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
             #Go through every block b
             for b in random_effect_block_labels_f
 
-                # 4.2 extract random effect terms and their sds for this block b
+                # 4.2 extract random effect terms for this block b
                 #Initialise storage
                 random_effect_term_labels_b = []
-                sds_b = Float64[]
                 #For each regression r
                 for r in labels.regressions
                     #Extract block assignments for this regression and factor
@@ -295,8 +289,6 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
                         if random_effect_block_assignments_f[At(q)] == b
                             #Store its label
                             push!(random_effect_term_labels_b, q)
-                            #Store its standard deviation
-                            push!(sds_b, random_effect_sds[At(r)][At(f)][At(g)][At(q)])
                         end
                     end
                 end
@@ -307,7 +299,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
                 #For non-centered parameterisations
                 if parameterisation_f == NonCentered
 
-                    #4.4 Sample random effects as z-scores for this block
+                    # 4.4 Sample random effects as z-scores for this block
                     #Go through each level l
                     for l in random_effect_level_labels_g
                         #Sample random effect z-scores from a standard normal
@@ -317,13 +309,16 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
                     #For centered parameterisations
                 elseif parameterisation_f == Centered
 
-                    # 4.5 extract random effect correlations for this block
+                    # 4.5 extract random effect sds for this block
+                    sds_b = view(random_effect_sds_flat, specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
+
+                    # 4.6 extract random effect correlations for this block
                     random_effect_correlations_b = random_effect_correlations[At(f)][At(g)][At(b)]
 
-                    # 4.6 Construct random effect covariances for this block
+                    # 4.7 Construct random effect covariances for this block
                     random_effect_covariances_b = Diagonal(sds_b) * random_effect_correlations_b.L
 
-                    # 4.7 Sample random effects for this block
+                    # 4.8 Sample random effects for this block
                     #Go through each level l
                     for l in random_effect_level_labels_g
                         #Sample random effects for this block (multiply the Cholesky factor with standard normal samples)
@@ -337,7 +332,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
         random_effects[At(f)] = random_effects_f
     end
 
-    return RegressionCoefficients(fixed_effects, random_effect_sds, random_effect_correlations, random_effects, specifications)
+    return RegressionCoefficients(fixed_effects_flat, random_effect_sds_flat, random_effect_correlations, random_effects, specifications)
 end
 
 ## 2. Logpdf function ##
@@ -351,14 +346,10 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
     logprob = 0.0
 
     ## 1. Add logprob of each fixed effect term p across regressions r ##
-    for r in labels.regressions
-        logprob += logpdf(d.fixed_effects[At(r)], x.fixed_effects[At(r)])
-    end
+    logprob += logpdf(d.fixed_effects, x.fixed_effects_flat)
 
     ## 2. Add logprob of SDs of each random effect term, across group, factors and regressions ##
-    for r in labels.regressions, f in labels.random_effect_factors, g in labels.random_effect_groups[At(f)]
-        logprob += sum(logpdf.(d.random_effect_sds[At(r)][At(f)][At(g)], x.random_effect_sds[At(r)][At(f)][At(g)]))
-    end
+    logprob += logpdf(d.random_effect_sds, x.random_effect_sds_flat)
 
     ## 3. Add logprob for random effects for each group in each factor ##
     #Go through each factor f
@@ -383,10 +374,9 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
                 logprob += logpdf(d.random_effect_correlations[At(f)][At(g)][At(b)], random_effect_correlations_b)
 
 
-                # 3.4 Extract random effect terms and their sds for this block across all regressions
+                # 3.4 Extract random effect terms for this block across all regressions
                 #Initialise storage
                 random_effect_term_labels_b = Symbol[]
-                sds_b = Float64[]
                 #For each regression r
                 for r in labels.regressions
                     #Extract block assignments for this regression and factor
@@ -397,8 +387,6 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
                         if random_effect_block_assignments_f[At(q)] == b
                             #Store its label
                             push!(random_effect_term_labels_b, q)
-                            #Store its standard deviation
-                            push!(sds_b, x.random_effect_sds[At(r)][At(f)][At(g)][At(q)])
                         end
                     end
                 end
@@ -417,18 +405,20 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
 
                 elseif parameterisation_f == Centered #for centered parameterisations
 
-                    # 3.8 Reconstruct block covariance and random effect distribution
+                    # 3.8 extract random effect sds for this block
+                    sds_b = view(x.random_effect_sds_flat, specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
+
+                    # 3.9 Reconstruct block covariance and random effect distribution
                     L = random_effect_correlations_b.L
                     random_effect_covariances_b = Diagonal(sds_b) * (L * L') * Diagonal(sds_b)
                     random_effect_covariances_b = PDMat(Symmetric(Matrix(random_effect_covariances_b + 1e-8 * I)))
                     dist_b = MvNormal(zeros(length(sds_b)), random_effect_covariances_b)
 
-                    # 3.9 Add logprobs for random effects in this block
+                    # 3.10 Add logprobs for random effects in this block
                     #Extract the random effects for this block [Levels x Terms]
                     random_effects_b = x.random_effects[At(f)][At(parent(random_effect_levels_g)), At(random_effect_term_labels_b)]
                     #Add logprobs for all random effects in this block
                     logprob += sum(logpdf(dist_b, collect(parent(random_effects_b)')))
-
                 end
             end
         end
@@ -444,7 +434,61 @@ end
 ### UTILITY FUNCTIONS ###
 #########################
 
-## 1. Materialiser function for getting actual random effects irrespective of parameterisation ##
+## 1. Unflattening function for fixed effects ##
+function unflatten_fixed_effects(fixed_effects_flat::Vector{R}, specifications::RegressionSpecifications) where {R<:Real}
+
+    # Extract information
+    labels = specifications.labels
+
+    # Structure fixed effects properly, and add labels
+    fixed_effects = DimArray([
+        DimArray(
+            view(fixed_effects_flat, specifications.fixed_effect_indices[At(r)]),
+            labels.fixed_effect_terms[At(r)]
+        )
+        for r in labels.regressions
+    ], labels.regressions)
+
+    return fixed_effects
+
+end
+
+## 2. Unflattening function for random effect sds ##
+function unflatten_random_effect_sds(random_effect_sds_flat::Vector{R}, specifications::RegressionSpecifications) where {R<:Real}
+
+    # Extract information
+    labels = specifications.labels
+
+    # Structure random effect sds properly, and add labels
+    random_effect_sds = DimArray([
+        DimArray([
+            DimArray([
+                DimArray(
+                    view(random_effect_sds_flat, specifications.random_effect_sds_indices[At(r)][At(f)][At(g)]),
+                    labels.random_effect_terms[At(r)][At(f)]
+                )
+                for g in labels.random_effect_groups[At(f)]
+            ], labels.random_effect_groups[At(f)]) 
+            for f in labels.random_effect_factors
+        ], labels.random_effect_factors) 
+        for r in labels.regressions
+    ], labels.regressions)
+
+    return random_effect_sds
+
+end
+
+
+## 3. Getter function for the fixed effects ##
+function get_fixed_effects(coefficients::RegressionCoefficients)
+
+    #Unflatten and return fixed effects
+    return unflatten_fixed_effects(coefficients.fixed_effects_flat, coefficients.specifications)
+
+end
+
+
+## 4. Materialiser function for getting actual random effects irrespective of parameterisation ##
 function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoefficients}
 
     ## 0. Setup ##
@@ -498,7 +542,6 @@ function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoeff
                     # 2.2 Identify random effect terms and SDs for this block
                     #Initialise storage
                     random_effect_term_labels_b = []
-                    sds_b = Float64[]
                     #For each regression r
                     for r in labels.regressions
                         #Extract block assignments for this regression and factor
@@ -509,14 +552,15 @@ function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoeff
                             if random_effect_block_assignments_f[At(q)] == b
                                 #Store its label
                                 push!(random_effect_term_labels_b, q)
-                                #Store its standard deviation
-                                push!(sds_b, coefficients.random_effect_sds[At(r)][At(f)][At(g)][At(q)])
                             end
                         end
                     end
 
                     # 2.3 If there are no terms in this block, skip to next block
                     isempty(random_effect_term_labels_b) && continue
+
+                    # 2.4 extract random effect sds for this block
+                    sds_b = view(coefficients.random_effect_sds_flat, specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
 
                     # 2.4 Reconstruct random effect covariances for this block
                     random_effect_covariances_b = Diagonal(sds_b) * coefficients.random_effect_correlations[At(f)][At(g)][At(b)].L
@@ -534,10 +578,82 @@ function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoeff
     return random_effects
 end
 
-## 2. Getter function for the fixed effects ##
-function get_fixed_effects(coefficients::RegressionCoefficients)
-    return coefficients.fixed_effects
+
+## 5. Function for generating indices mapping from the flattened coefficient vectors to structured representationjs and block assignments ##
+function generate_indices(labels::RegressionLabels, random_effect_block_assignments::T) where {T<:AbstractVector}
+
+    ## Fixed effects ##
+    fixed_effect_indices = DimArray(
+        Vector{UnitRange{Int}}(undef, length(labels.regressions)), 
+        labels.regressions
+    )
+    curr_idx = 1
+    for r in labels.regressions
+        n_terms = length(labels.fixed_effect_terms[At(r)])
+        fixed_effect_indices[At(r)] = curr_idx:(curr_idx + n_terms - 1)
+        curr_idx += n_terms
+    end
+
+    ## Random effect SDs ##
+    random_effect_sds_indices = DimArray([
+        DimArray([
+            DimArray(
+                Vector{UnitRange{Int}}(undef, length(labels.random_effect_groups[At(f)])), 
+                labels.random_effect_groups[At(f)]
+            )
+            for f in labels.random_effect_factors
+        ], labels.random_effect_factors)
+        for r in labels.regressions
+    ], labels.regressions)
+    curr_idx = 1
+    for r in labels.regressions
+        for f in labels.random_effect_factors
+            for g in labels.random_effect_groups[At(f)]
+                n_terms = length(labels.random_effect_terms[At(r)][At(f)])
+                random_effect_sds_indices[At(r)][At(f)][At(g)] = curr_idx:(curr_idx + n_terms - 1)
+                curr_idx += n_terms
+            end
+        end
+    end
+
+    ## Random effect SDs -> block indices ##
+    random_effect_sds_block_indices = DimArray([
+        DimArray([
+            DimArray([
+                # Collect absolute indices across all regressions
+                reduce(vcat, [
+                    begin
+                        r_f_g_range = random_effect_sds_indices[At(r)][At(f)][At(g)]
+                        
+                        # Find which terms in this Regression-Factor belong to block 'b'
+                        # parent() is used to get the raw vector of block symbols
+                        local_indices = findall(==(b), parent(random_effect_block_assignments[At(r)][At(f)]))
+                        
+                        # If local_indices is empty or the range is empty (1:0), 
+                        # we return an empty Int vector.
+                        if isempty(local_indices) || isempty(r_f_g_range)
+                            Int[]
+                        else
+                            # Map local term indices to absolute indices in the flat vector
+                            # We take the start of the range and add the local offsets
+                            # local_indices are 1-based, so subtract 1
+                            collect((r_f_g_range.start - 1) .+ local_indices)
+                        end
+                    end
+                    for r in labels.regressions
+                ])
+                for b in labels.random_effect_blocks[At(f)]
+            ], labels.random_effect_blocks[At(f)])
+            for g in labels.random_effect_groups[At(f)]
+        ], labels.random_effect_groups[At(f)])
+        for f in labels.random_effect_factors
+    ], labels.random_effect_factors)
+
+    return (fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices)
+
 end
+
+
 
 ################################
 ### EVALUATION: DISTRIBUTION ###
@@ -607,7 +723,10 @@ random_effect_level_labels = DimArray([
 #    - Factor 2: 1 group G, 1 term Q
 
 #Fixed effect priors
-r1_fixed = product_distribution([Normal(0, 1), Normal(0, 1), Normal(0, 1)])
+r1_fixed = DimArray(
+    [Normal(0, 1), Normal(0, 1), Normal(0, 1)], 
+    fixed_effect_term_labels[At(regression_labels[1])]
+)
 
 #Random effect SD priors
 r1_sds = DimArray([
@@ -636,7 +755,10 @@ r1_sds = DimArray([
 #    - Factor 2: 1 groups G, 0 terms Q
 
 #Fixed effect priors
-r2_fixed = product_distribution([Normal(0, 1), Normal(0, 1), Normal(0, 1), Normal(0, 1), Normal(0, 1)])
+r2_fixed = DimArray(
+    [Normal(0, 1), Normal(0, 1), Normal(0, 1), Normal(0, 1), Normal(0, 1)], 
+    fixed_effect_term_labels[At(regression_labels[2])]
+)
 
 #Random effect SD priors
 r2_sds = DimArray([
@@ -682,16 +804,6 @@ f1_cor_priors = DimArray([
         LKJCholesky(3, 1.0)
     ], random_effect_block_labels[At(random_effect_factor_labels[1])]),
 ], random_effect_group_labels[At(random_effect_factor_labels[1])])
-
-
-#Gather all random effect terms for factor 2 in a flattened vector
-f2_random_effect_term_labels = RandomEffectTermDim([
-    q
-    for r in regression_labels
-    for q in random_effect_term_labels[At(r)][At(random_effect_factor_labels[2])]
-])
-
-f2_blocks = DimArray([:f2_Block1], f2_random_effect_term_labels)
 
 
 f2_cor_priors = DimArray([
@@ -752,7 +864,16 @@ fixed_effect_priors = DimArray([r1_fixed, r2_fixed], regression_labels)
 random_effect_sd_priors = DimArray([r1_sds, r2_sds], regression_labels)
 correlation_priors = DimArray([f1_cor_priors, f2_cor_priors], random_effect_factor_labels)
 
-#Initialise specifications and priors
+
+
+## Collect individual priors into multivariate priors ##
+#Fixed effects
+fixed_effect_priors_gathered = product_distribution([prior_p for priors_r in fixed_effect_priors for prior_p in priors_r])
+#Random effect SDs
+random_effect_sd_priors_gathered = product_distribution([prior_q for priors_r in random_effect_sd_priors for priors_f in priors_r for priors_g in priors_f for prior_q in priors_g])
+
+
+## Initialise labels ##
 labels = RegressionLabels(
     regression_labels,
     fixed_effect_term_labels,
@@ -762,14 +883,21 @@ labels = RegressionLabels(
     random_effect_block_labels,
     random_effect_level_labels
 )
-regression_specifications = RegressionSpecifications(group_assignments, block_assignments, random_effect_parameterisations, labels)
-priors = RegressionPriors(fixed_effect_priors, random_effect_sd_priors, correlation_priors, regression_specifications)
 
-#Execute
+## Generate indices for mapping from flattened vector to structured coefficients
+(fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices) = generate_indices(labels, block_assignments)
+
+## Initialise specifications and priors ##
+regression_specifications = RegressionSpecifications(group_assignments, block_assignments, random_effect_parameterisations, fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices, labels)
+priors = RegressionPriors(fixed_effect_priors_gathered, random_effect_sd_priors_gathered, correlation_priors, regression_specifications)
+
+
+## Execute ##
 coeffs = rand(priors)
 total_logprob = logpdf(priors, coeffs)
 fixed_effects = get_fixed_effects(coeffs)
 random_effects = get_random_effects(coeffs)
+
 
 
 #######################
@@ -924,3 +1052,4 @@ end
 model = m(predictors, priors)
 
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
+
