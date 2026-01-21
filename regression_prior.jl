@@ -4,8 +4,6 @@
 
 #TODO:
 # - A. Core features
-#   - 2. Allow for adding terms to the regression inside the Turing model
-#      B. Make add_term! function for adding terms to the RegressionPredictors
 #   - 3. Allow for generating level assignments for random effects inside the Turing model
 #      A. Make the RegressionPrior and its functions modular, so that one part samples hyperparameters, and another part samples random effects from the hyperparameters and provided level assignments
 #   - 4. Allow for passing "nothing" instead of a LKJCholesky prior to specify that random effects in this block are uncorrelated
@@ -899,12 +897,13 @@ random_effects = get_random_effects(coeffs)
 
 
 
+
 #######################
 ### FULL REGRESSION ###
 #######################
 
 ### STRUCTS ###
-## Predictors struct ##
+## 1. Predictors struct ##
 struct RegressionPredictors{Tfixedeffects<:DimArray, Trandomeffects<:DimArray, Tlevels<:DimArray}
     #Vector (R regressions) of fixed effect design matrices (N observations x P fixed effect terms)
     fixed_effect_design_matrices::Tfixedeffects
@@ -917,11 +916,18 @@ struct RegressionPredictors{Tfixedeffects<:DimArray, Trandomeffects<:DimArray, T
     random_effect_level_assignments::Tlevels
 end
 
-### REGRESSION FUNCTION ###
-
-
-## 1. Function for calculating outcomes for a single regression ##
-function linear_prediction(fixed_effects, random_effects, fixed_effect_design_matrix, random_effect_design_matrices, random_effect_level_assignments, random_effect_term_labels)
+### LINEAR PREDICTION FUNCTION ###
+## 2. Function for calculating outcomes for a single regression ##
+function linear_prediction(; 
+    fixed_effects::Tfixed_effects,
+    random_effects::Trandom_effects, 
+    fixed_effect_design_matrix::Tfixed_effects_design_matrix, 
+    random_effect_design_matrices::Trandom_effect_design_matrices, 
+    random_effect_level_assignments::Trandom_effect_level_assignments, 
+    random_effect_term_labels::Trandom_effect_term_labels
+    ) where {
+        Tfixed_effects, Trandom_effects, Tfixed_effects_design_matrix, Trandom_effect_design_matrices, Trandom_effect_level_assignments, Trandom_effect_term_labels
+    }
 
     # 1. Extract labels for the observations in this regression
     observation_labels = dims(fixed_effect_design_matrix, ObservationDim)
@@ -953,29 +959,68 @@ function linear_prediction(fixed_effects, random_effects, fixed_effect_design_ma
 
 end
 
-## 2. High-level unction for calculating outcomes across a set of regressions ##
+## Medium-level functions for simplifying input, by allowing inputting the predictors as a single object ##
+function linear_prediction(
+    fixed_effects::Tfixed_effects,
+    random_effects::Trandom_effects, 
+    predictors::Tpredictors,
+    labels::Tlabels,
+    r::Symbol
+    ) where {
+        Tfixed_effects, Trandom_effects, Tpredictors<:RegressionPredictors, Tlabels<:RegressionLabels
+    }
+
+    return linear_prediction(
+        fixed_effects = fixed_effects[At(r)], 
+        random_effects = random_effects, 
+        fixed_effect_design_matrix = predictors.fixed_effect_design_matrices[At(r)],
+        random_effect_design_matrices = predictors.random_effect_design_matrices[At(r)],
+        random_effect_level_assignments = predictors.random_effect_level_assignments[At(r)],
+        random_effect_term_labels = labels.random_effect_terms[At(r)],
+    )
+end
+
+## Medium-level functions for simplifying input, by allowing inputting specifications instead of labels ##
+function linear_prediction(
+    fixed_effects::Tfixed_effects,
+    random_effects::Trandom_effects, 
+    predictors::Tpredictors,
+    specifications::Tspecifications,
+    r::Symbol
+    ) where {
+        Tfixed_effects, Trandom_effects, Tpredictors<:RegressionPredictors, Tspecifications<:RegressionSpecifications
+    }
+
+    return linear_prediction(
+        fixed_effects,
+        random_effects, 
+        predictors.labels,
+        specifications,
+        r
+    )
+end
+
+## 3. High-level unction for calculating outcomes across a set of regressions ##
 function linear_prediction(predictors::Tpredictors, coefficients::Tcoefficients) where {Tpredictors<:RegressionPredictors,Tcoefficients<:RegressionCoefficients}
 
     ## 0. Setup ##
     #Extract information
-    specifications = coefficients.specifications
-    labels = specifications.labels
+    labels = coefficients.specifications.labels
 
     #Extract coefficients
     #Vector (R regressions) of vectors (P fixed effect terms)
     fixed_effects = get_fixed_effects(coefficients)
-    #Vector (F factors) of matrices (J random effect levels, Q_total random effect terms)
+    #Vector (R regressions) of vectors (F factors) of matrices (J random effect levels, Q_total random effect terms)
     random_effects = get_random_effects(coefficients)
 
     #Calculate the linear predictions for each regression
     outcomes = DimArray([
         linear_prediction(
-            fixed_effects[At(r)], 
+            fixed_effects, 
             random_effects, 
-            predictors.fixed_effect_design_matrices[At(r)], 
-            predictors.random_effect_design_matrices[At(r)], 
-            predictors.random_effect_level_assignments[At(r)], 
-            labels.random_effect_terms[At(r)]
+            predictors, 
+            labels, 
+            r, 
         )
         for r in labels.regressions
     ], labels.regressions)
@@ -983,6 +1028,137 @@ function linear_prediction(predictors::Tpredictors, coefficients::Tcoefficients)
     return outcomes
 end
 
+
+### UTILITY FUNCTIONS ###
+## 4. Function for updating a term in all regressions ##
+function update_predictor(predictors::Tpredictors, values::Tvalues, term::Symbol) where {Tpredictors<:RegressionPredictors, Tvalues<:AbstractVector}
+
+    #Update each regression one at a time
+    return foldl((predictors_r, r) -> update_predictor(predictors_r, values, term, r), 
+          val(dims(predictors.fixed_effect_design_matrices, RegressionDim)), 
+          init = predictors)
+
+end
+
+## 5. Function for updating a term in a single regression ##
+function update_predictor(predictors::Tpredictors, values::Tvalues, term::Symbol, r::Symbol) where {Tpredictors<:RegressionPredictors, Tvalues<:AbstractVector}
+    
+    ## 0. Extract information ##
+    fixed_effect_design_matrices = predictors.fixed_effect_design_matrices
+    random_effect_design_matrices = predictors.random_effect_design_matrices
+    
+    ## 1. Update fixed effects ##
+    #Extract regression-specific matrix
+    fixed_effect_design_matrix_r = fixed_effect_design_matrices[At(r)]
+    #Update it
+    updated_fixed_effect_design_matrix_r = update_design_matrix(fixed_effect_design_matrix_r, values, term)
+
+    ## 2. Update random effects ##
+    #Extract regression-specific matrices
+    random_effect_design_matrices_r = random_effect_design_matrices[At(r)]
+
+    #Make new copy of the vector containing the matrices
+    updated_random_effect_design_matrices_r = copy(parent(random_effect_design_matrices_r))
+
+    #Go through each factor f
+    for idx_f in eachindex(dims(random_effect_design_matrices_r, RandomEffectFactorDim))
+
+        #Replace the matrix with an updated matrix
+        updated_random_effect_design_matrices_r[idx_f] = update_design_matrix(random_effect_design_matrices_r[idx_f], values, term)
+    end
+
+    #Rebuild the DimArray containing the vectors
+    updated_random_effect_design_matrices_r = rebuild(random_effect_design_matrices_r, updated_random_effect_design_matrices_r)
+
+    ## 3. Make copies of design matrix containers ##
+    #Get regression integer index
+    regression_idx = findfirst(==(r), val(dims(predictors.fixed_effect_design_matrices, RegressionDim)))
+
+    #Copy original containers
+    new_fixed_effect_design_matrices = copy(parent(fixed_effect_design_matrices))
+    new_random_effect_design_matrices = copy(parent(random_effect_design_matrices))
+
+    #Replace the matrices for the specific regression
+    new_fixed_effect_design_matrices[regression_idx] = updated_fixed_effect_design_matrix_r
+    new_random_effect_design_matrices[regression_idx] = updated_random_effect_design_matrices_r
+
+    #Rebuild to make sure the format of the containers is identical
+    new_fixed_effect_design_matrices = rebuild(fixed_effect_design_matrices, new_fixed_effect_design_matrices)
+    new_random_effect_design_matrices = rebuild(random_effect_design_matrices, new_random_effect_design_matrices)
+    
+    ## 3. Return a new predictor struct ##
+    return RegressionPredictors(
+        new_fixed_effect_design_matrices,
+        new_random_effect_design_matrices,
+        predictors.random_effect_level_assignments
+    )
+end
+
+## 6. Function for replacing a column in a design matrix ##
+function update_design_matrix(design_matrix::Tmatrix, values::Tvalues, term::Symbol) where {Tmatrix <: AbstractMatrix, Tvalues <: AbstractVector}
+    
+    #If the term exists in the design matrix
+    if term in val(dims(design_matrix, 2))
+
+        #Find the column index of the term in the design matrix
+        term_idx = findfirst(==(term), val(dims(design_matrix, 2)))
+
+        #Return a new design matrix where the target column has been replaced
+        return rebuild(design_matrix, hcat(parent(design_matrix)[:, 1:term_idx-1], values, parent(design_matrix)[:, term_idx+1:end]))
+
+    else #If the term does not exist
+
+        #Use the old design matrix
+        return design_matrix
+    end
+end
+
+
+## 7. In-place function for updating a term in all regressions ##
+function update_predictor!(predictors::Tpredictors, values::Tvalues, term::Symbol) where {Tpredictors<:RegressionPredictors, Tvalues<:AbstractVector}
+
+    #For each regression r
+    for r in val(dims(predictors.fixed_effect_design_matrices, RegressionDim))
+
+        #Update the predictor in that regression
+        update_predictor!(predictors, values, term, r)
+
+    end
+
+    return nothing
+end
+
+
+## 8. In-place function for updating a term in a single regression ##
+function update_predictor!(predictors::Tpredictors, values::Tvalues, term::Symbol, r::Symbol) where {Tpredictors<:RegressionPredictors, Tvalues<:AbstractVector}
+    
+    #Update fixed effects
+    fixed_effect_design_matrix_r = predictors.fixed_effect_design_matrices[At(r)]
+    update_design_matrix!(fixed_effect_design_matrix_r, values, term)
+
+    #Update random effects
+    random_effect_design_matrices_r = predictors.random_effect_design_matrices[At(r)]
+    for f in dims(random_effect_design_matrices_r, RandomEffectFactorDim)
+        update_design_matrix!(random_effect_design_matrices_r[At(f)], values, term)
+    end
+
+    return nothing
+end
+
+
+## 9. In-place function for replacing a column in a design matrix ##
+function update_design_matrix!(design_matrix::Tmatrix, values::Tvalues, term::Symbol) where {Tmatrix <: AbstractMatrix, Tvalues <: AbstractVector}
+    
+    #If the term exists in the design matrix
+    if term in val(dims(design_matrix, 2))
+
+        #Update the values in the column
+        design_matrix[:, At(term)] .= values
+
+    end
+
+    return nothing
+end
 
 
 #######################################
@@ -1039,12 +1215,22 @@ coefficients = rand(priors)
 
 outcomes = linear_prediction(predictors, coefficients)
 
-################################
-### EVALUATION: TURING MODEL ###
-################################
 
-#Turing model definition
-@model function m(predictors::RegressionPredictors, priors::RegressionPriors)
+new_predictors = update_predictor(predictors, zeros(N), :Term3, :Regression1)
+new_predictors = update_predictor(new_predictors, zeros(N), :Term2)
+
+update_predictor!(new_predictors, ones(N), :Term2, :Regression2)
+update_predictor!(new_predictors, ones(N), :Term4)
+
+
+
+
+#################################
+### EVALUATION: TURING MODELS ###
+#################################
+
+## 1. Simple model ##
+@model function m1(predictors::RegressionPredictors, priors::RegressionPriors)
 
     # 1. Sample coefficients
     coefficients ~ priors
@@ -1053,11 +1239,110 @@ outcomes = linear_prediction(predictors, coefficients)
     outcomes = linear_prediction(predictors, coefficients)
 
     # 3. Here the likelihood would come
-    # i = to_submodel(custom_likelihood(outcomes))
 
 end
 
-model = m(predictors, priors)
+model = m1(predictors, priors)
 
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
+
+
+
+
+
+
+## 2. Model using generated predictors ##
+@model function m2(predictors::RegressionPredictors, priors::RegressionPriors)
+
+    ## 0. Extract model information ##
+    labels = priors.specifications.labels
+
+    ## 1. Sample coefficients ##
+    coefficients ~ priors
+
+    ## 2. Extract information ##
+    # Extract coefficients
+    #Vector (R regressions) of vectors (P fixed effect terms)
+    fixed_effects = get_fixed_effects(coefficients)
+    #Vector (R regressions) of vectors (F factors) of matrices (J random effect levels, Q_total random effect terms)
+    random_effects = get_random_effects(coefficients)
+
+    ## 3. Calculate the outcomes for the first regression ##
+    outcomes_1 = linear_prediction(
+            fixed_effects, 
+            random_effects, 
+            predictors, 
+            labels, 
+            :Regression1, 
+        )
+
+    ## 4. Overwrite Term2 with the outcomes ##
+    new_predictors = update_predictor(predictors, outcomes_1, :Term2)
+
+    ## 5. DO the other regression using the new predictor ##
+    outcomes_2 = linear_prediction(
+            fixed_effects, 
+            random_effects, 
+            new_predictors, 
+            labels, 
+            :Regression2, 
+        )
+
+    # 3. Here the likelihood would come
+
+end
+
+model = m2(predictors, priors)
+
+chain = sample(model, Prior(), 1000, chain_type=VNChain)
+
+
+
+
+
+## 3. Model using generated predictors, and updating them by mutation ##
+@model function m3(predictors::RegressionPredictors, priors::RegressionPriors)
+
+    ## 0. Extract model information ##
+    labels = priors.specifications.labels
+
+    ## 1. Sample coefficients ##
+    coefficients ~ priors
+
+    ## 2. Extract information ##
+    # Extract coefficients
+    #Vector (R regressions) of vectors (P fixed effect terms)
+    fixed_effects = get_fixed_effects(coefficients)
+    #Vector (R regressions) of vectors (F factors) of matrices (J random effect levels, Q_total random effect terms)
+    random_effects = get_random_effects(coefficients)
+
+    ## 3. Calculate the outcomes for the first regression ##
+    outcomes_1 = linear_prediction(
+            fixed_effects, 
+            random_effects, 
+            predictors, 
+            labels, 
+            :Regression1, 
+        )
+
+    ## 4. Overwrite Term2 with the outcomes ##
+    update_predictor!(predictors, outcomes_1, :Term2)
+
+    ## 5. DO the other regression using the new predictor ##
+    outcomes_2 = linear_prediction(
+            fixed_effects, 
+            random_effects, 
+            predictors, 
+            labels, 
+            :Regression2, 
+        )
+
+    # 3. Here the likelihood would come
+
+end
+
+model = m3(deepcopy(predictors), priors)
+
+chain = sample(model, Prior(), 1000, chain_type=VNChain)
+
 
