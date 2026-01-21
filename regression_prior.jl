@@ -23,7 +23,8 @@
 #   - 1. Add comments with canonical mathematical notation
 #   - 2. Change naming of Cholesky factor
 #   - 3. Allow empty fixed effects
-#   - 4. Set full type requirements for structs
+#   - 4. Set full, concrete type requirements everywhere possible
+#   - 5. Ensure that DualNumbers can be usued throughout
 # - E. Functionality
 #   - 1. unit tests
 #   - 2. documentation
