@@ -4,17 +4,16 @@
 
 #TODO:
 # - A. Core features
-#   - 3. Allow for generating level assignments for random effects inside the Turing model
+#   - 2. Allow for generating level assignments for random effects inside the Turing model
 #      A. Make the RegressionPrior and its functions modular, so that one part samples hyperparameters, and another part samples random effects from the hyperparameters and provided level assignments
-#   - 4. Allow for passing "nothing" instead of a LKJCholesky prior to specify that random effects in this block are uncorrelated
-#   - 5. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
+#   - 3. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
 # - B. Optimisation
 #   - 1. Minimise use of DimensionalData where not needed
 #   - 2. Ensure type stability
 #   - 3. Pre-allocate random effect block assignments
 # - C. Core Utilities
 #   - 1. Make constructor function for RegressionPrior
-#      A. Which construct multivariate distributions form individual priors_f
+#      A. Which construct multivariate distributions from individual priors_f
 #      B. Which creates default priors or extrapolates single priors to full structure
 #      C. Which checks that the inputs are all properly structured and matching
 #   - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
@@ -25,6 +24,8 @@
 #   - 3. Allow empty fixed effects
 #   - 4. Set full, concrete type requirements everywhere possible
 #   - 5. Ensure that DualNumbers can be usued throughout
+#   - 6. Make getter functions for random effect hyperparameters
+#   - 7. Organise repository
 # - E. Functionality
 #   - 1. unit tests
 #   - 2. documentation
@@ -40,10 +41,13 @@
 #   - 4. add labels for categorical predictors
 # - H. Extra
 #   - 1. Make Turing submodel alternative to rand and logpdf (and benchmark)
-#   - 2. Decide whether to store fixed effect and random effect sds as DimArrays or flat vectors internally
 # - I. Long Future features
 #   - 1. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
 #   - 2. Variance Component Analysis - letting random effect sd priors come from a multivariate distribution which can weigh between them. Would probably need to be all random effects from one big distribution.
+# - X. Decisions to make
+#   - 1. What should be the value in matrices with un-generated values? 0, undef or missing?
+#   - 2. What do we do with missing values in the predictors? Set them to 0, drop them, or return an error?
+#   - 3. Should fixed effects and random effect sds be stored as flat vectors or as structured vectors internally?
 
 ### TERMINOLOGY ###
 # - Regression (r): A single regression model. Multiple can be connected.
@@ -235,7 +239,25 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
     random_effect_correlations = DimArray([
             DimArray([
                     DimArray([
-                            rand(rng, d.random_effect_correlations[At(f)][At(g)][At(b)])
+                        #For every block b
+                        begin
+                                #Extract the prior
+                                random_effect_correlation_prior_b = d.random_effect_correlations[At(f)][At(g)][At(b)]
+
+                                #If there is no LKJCholesky prior
+                                if isnothing(random_effect_correlation_prior_b)
+
+                                    #Generate a Cholesky object corresponding to an identity covariance matrix implying uncorrelated random effects
+                                    n_terms = length(specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
+
+                                    Cholesky(Matrix{Float64}(I, n_terms, n_terms), :L, 0)
+
+                                else #If there is a LKJCholesky prior
+
+                                    #Sample a Cholesky object from it
+                                    rand(rng, random_effect_correlation_prior_b)
+                                end
+                            end
                             for b in labels.random_effect_blocks[At(f)]],
                         labels.random_effect_blocks[At(f)])
                     for g in labels.random_effect_groups[At(f)]
@@ -370,8 +392,11 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:Regressi
 
                 # 3.3 extract random effect correlations, and add logprob
                 random_effect_correlations_b = x.random_effect_correlations[At(f)][At(g)][At(b)]
-                logprob += logpdf(d.random_effect_correlations[At(f)][At(g)][At(b)], random_effect_correlations_b)
-
+                random_effect_correlation_prior_b = d.random_effect_correlations[At(f)][At(g)][At(b)]
+                #If there is a LKJCholesky prior
+                if !isnothing(random_effect_correlation_prior_b)
+                     logprob += logpdf(random_effect_correlation_prior_b, random_effect_correlations_b)
+                end
 
                 # 3.4 Extract random effect terms for this block across all regressions
                 #Initialise storage
@@ -798,7 +823,7 @@ f1_cor_priors = DimArray([
     #Group 2
     DimArray([
         #Block 1
-        LKJCholesky(2, 1.0),
+        nothing, #Random effects in this block assumed to be independent
         #Block 2
         LKJCholesky(3, 1.0)
     ], random_effect_block_labels[At(random_effect_factor_labels[1])]),
@@ -896,7 +921,6 @@ coeffs = rand(priors)
 total_logprob = logpdf(priors, coeffs)
 fixed_effects = get_fixed_effects(coeffs)
 random_effects = get_random_effects(coeffs)
-
 
 
 
