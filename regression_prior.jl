@@ -185,7 +185,7 @@ struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,
 end
 
 ## 3. Prior struct, distribution that coefficients can be sampled from ##
-struct RegressionPriors{Tfixed<:MultivariateDistribution,Tsds<:MultivariateDistribution,Tcorrs<:AbstractVector,Tspecs<:RegressionSpecifications} <: ContinuousMultivariateDistribution
+struct RegressionPrior{Tfixed<:MultivariateDistribution,Tsds<:MultivariateDistribution,Tcorrs<:AbstractVector,Tspecs<:RegressionSpecifications} <: ContinuousMultivariateDistribution
 
     #Multivariate distribution flattened from vector (R regressions) of multivariate priors (across P fixed effect terms)
     fixed_effects::Tfixed
@@ -223,7 +223,7 @@ end
 ### DISTRIBUTION FUNCTIONS ###
 
 ## 1. Sampling function ##
-function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
+function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
 
     ## 0. Extract information ##
     specifications = d.specifications
@@ -357,7 +357,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPriors}
 end
 
 ## 2. Logpdf function ##
-function Distributions.logpdf(d::D, x::T) where {D<:RegressionPriors,T<:RegressionCoefficients}
+function Distributions.logpdf(d::D, x::T) where {D<:RegressionPrior,T<:RegressionCoefficients}
 
     ## 0. Setup ##
     # Extract information
@@ -913,7 +913,7 @@ labels = RegressionLabels(
 
 ## Initialise specifications and priors ##
 regression_specifications = RegressionSpecifications(group_assignments, block_assignments, random_effect_parameterisations, fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices, labels)
-priors = RegressionPriors(fixed_effect_priors_gathered, random_effect_sd_priors_gathered, correlation_priors, regression_specifications)
+priors = RegressionPrior(fixed_effect_priors_gathered, random_effect_sd_priors_gathered, correlation_priors, regression_specifications)
 
 
 ## Execute ##
@@ -1256,7 +1256,7 @@ update_predictor!(new_predictors, ones(N), :Term4)
 #################################
 
 ## 1. Simple model ##
-@model function m1(predictors::RegressionPredictors, priors::RegressionPriors)
+@model function m1(predictors::RegressionPredictors, priors::RegressionPrior)
 
     # 1. Sample coefficients
     coefficients ~ priors
@@ -1278,7 +1278,7 @@ chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
 
 ## 2. Model using generated predictors ##
-@model function m2(predictors::RegressionPredictors, priors::RegressionPriors)
+@model function m2(predictors::RegressionPredictors, priors::RegressionPrior)
 
     ## 0. Extract model information ##
     labels = priors.specifications.labels
@@ -1327,7 +1327,7 @@ chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
 
 ## 3. Model using generated predictors, and updating them by mutation ##
-@model function m3(predictors::RegressionPredictors, priors::RegressionPriors)
+@model function m3(predictors::RegressionPredictors, priors::RegressionPrior)
 
     ## 0. Extract model information ##
     labels = priors.specifications.labels
