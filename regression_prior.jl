@@ -4,8 +4,6 @@
 
 #TODO:
 # - A. Core features
-#   - 2. Allow for generating level assignments for random effects inside the Turing model
-#      A. Make the RegressionPrior and its functions modular, so that one part samples hyperparameters, and another part samples random effects from the hyperparameters and provided level assignments
 #   - 3. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
 # - B. Optimisation
 #   - 1. Minimise use of DimensionalData where not needed
@@ -16,6 +14,7 @@
 #      A. Which construct multivariate distributions from individual priors_f
 #      B. Which creates default priors or extrapolates single priors to full structure
 #      C. Which checks that the inputs are all properly structured and matching
+#      D. Which allows for using symbols to define the levels assignments (these are then transformed into integers)
 #   - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
 #   - 3. Make custom plotting functions (FlexiChains & MCMCChains)
 # - D. Fixes
@@ -26,6 +25,7 @@
 #   - 5. Ensure that DualNumbers can be usued throughout
 #   - 6. Make getter functions for random effect hyperparameters
 #   - 7. Organise repository
+#   - 8. Make RegressionPrior modular, so that differnet components can be samplde one at a time
 # - E. Functionality
 #   - 1. unit tests
 #   - 2. documentation
@@ -44,6 +44,7 @@
 # - I. Long Future features
 #   - 1. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
 #   - 2. Variance Component Analysis - letting random effect sd priors come from a multivariate distribution which can weigh between them. Would probably need to be all random effects from one big distribution.
+#   - 3. Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is inside the Turing model)
 # - X. Decisions to make
 #   - 1. What should be the value in matrices with un-generated values? 0, undef or missing?
 #   - 2. What do we do with missing values in the predictors? Set them to 0, drop them, or return an error?
@@ -247,9 +248,10 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
                                 #If there is no LKJCholesky prior
                                 if isnothing(random_effect_correlation_prior_b)
 
-                                    #Generate a Cholesky object corresponding to an identity covariance matrix implying uncorrelated random effects
+                                    #Get the number of terms in this correlation block
                                     n_terms = length(specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
-
+                                    
+                                    #Generate a Cholesky object corresponding to an identity covariance matrix implying uncorrelated random effects
                                     Cholesky(Matrix{Float64}(I, n_terms, n_terms), :L, 0)
 
                                 else #If there is a LKJCholesky prior
@@ -267,7 +269,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
 
     ## 4. Sample the random effects themselves, factor by factor ## 
     #Initialise storage for random effect values
-    random_effects = DimArray(Vector{DimArray{Float64,2,<:Tuple{RandomEffectLevelDim,RandomEffectTermDim}}}(undef, length(labels.random_effect_factors)), labels.random_effect_factors) #CURRENTLY HERE
+    random_effects = DimArray(Vector{DimArray{Float64,2,<:Tuple{RandomEffectLevelDim,RandomEffectTermDim}}}(undef, length(labels.random_effect_factors)), labels.random_effect_factors) 
 
     #Go through each factor f
     for f in labels.random_effect_factors
@@ -971,8 +973,8 @@ function linear_prediction(;
         isempty(random_effect_term_labels_f) && continue
 
         # 5. Extract random effects for this factor f and these levels l
-        random_effect_level_assignments_f = random_effect_level_assignments[At(f)]
-        random_effects_l = random_effects[At(f)][At(parent(random_effect_level_assignments_f)), At(parent(random_effect_term_labels_f))]
+        random_effect_level_assignments_f = random_effect_level_assignments[:, At(f)]
+        random_effects_l = random_effects[At(f)][parent(random_effect_level_assignments_f), At(parent(random_effect_term_labels_f))]
 
         # 6. Extract random effect design matrix for this regression r and factor f
         random_effect_design_matrix_f = random_effect_design_matrices[At(f)]
@@ -984,6 +986,7 @@ function linear_prediction(;
     return DimArray(vec(outcomes), observation_labels)
 
 end
+
 
 ## Medium-level functions for simplifying input, by allowing inputting the predictors as a single object ##
 function linear_prediction(
@@ -1140,7 +1143,7 @@ function update_design_matrix(design_matrix::Tmatrix, values::Tvalues, term::Sym
 end
 
 
-## 7. In-place function for updating a term in all regressions ##
+## 7. Mutation function for updating a term in all regressions ##
 function update_predictor!(predictors::Tpredictors, values::Tvalues, term::Symbol) where {Tpredictors<:RegressionPredictors, Tvalues<:AbstractVector}
 
     #For each regression r
@@ -1155,7 +1158,7 @@ function update_predictor!(predictors::Tpredictors, values::Tvalues, term::Symbo
 end
 
 
-## 8. In-place function for updating a term in a single regression ##
+## 8. Mutation function for updating a term in a single regression ##
 function update_predictor!(predictors::Tpredictors, values::Tvalues, term::Symbol, r::Symbol) where {Tpredictors<:RegressionPredictors, Tvalues<:AbstractVector}
     
     #Update fixed effects
@@ -1172,7 +1175,7 @@ function update_predictor!(predictors::Tpredictors, values::Tvalues, term::Symbo
 end
 
 
-## 9. In-place function for replacing a column in a design matrix ##
+## 9. Mutation function for replacing a column in a design matrix ##
 function update_design_matrix!(design_matrix::Tmatrix, values::Tvalues, term::Symbol) where {Tmatrix <: AbstractMatrix, Tvalues <: AbstractVector}
     
     #If the term exists in the design matrix
@@ -1187,6 +1190,76 @@ function update_design_matrix!(design_matrix::Tmatrix, values::Tvalues, term::Sy
 end
 
 
+## 10. Function for updating level assignments in all regressions ##
+function update_level_assignments(predictors::Tpredictors, assignments::Tassignments, f::Symbol) where {Tpredictors <: RegressionPredictors, Tassignments <: AbstractVector}
+
+    # Update level assignments for each regression one at a time
+    return foldl((predictors_r, r) -> update_level_assignments(predictors_r, assignments, f, r), 
+          val(dims(predictors.random_effect_level_assignments, RegressionDim)), 
+          init = predictors)
+end
+
+
+## 11. Function for updating level assignments in a single regression ##
+function update_level_assignments(predictors::Tpredictors, assignments::Tassignments, f::Symbol, r::Symbol) where {Tpredictors <: RegressionPredictors, Tassignments <: AbstractVector}
+    
+    ## 0. Extract information ##
+    level_assignments = predictors.random_effect_level_assignments
+    
+    ## 1. Create copies of the of the container and the level assignments for this regression ##
+    new_level_assignments = copy(parent(level_assignments))
+    updated_level_assignments_r = copy(level_assignments[At(r)])
+
+    ## 2. Get indeces for the specific regression and factor ##
+    regression_idx = findfirst(==(r), val(dims(predictors.random_effect_level_assignments, RegressionDim)))
+    factor_idx = findfirst(==(f), val(dims(updated_level_assignments_r, RandomEffectFactorDim)))
+    
+    ## 3. Update the copy for this regression ##
+    parent(updated_level_assignments_r)[:, factor_idx] .= assignments
+
+    ## 4. Replace the updated matrix ##
+    new_level_assignments[regression_idx] = updated_level_assignments_r
+
+    ## 5. Rebuild the container to give it the correct labels
+    new_level_assignments = rebuild(level_assignments, new_level_assignments)
+
+    ## 6. Return a new struct ##
+    return RegressionPredictors(
+        predictors.fixed_effect_design_matrices,
+        predictors.random_effect_design_matrices,
+        new_level_assignments
+    )
+end
+
+
+## 12. Mutation function for updating level assignments in all regressions ##
+function update_level_assignments!(predictors::Tpredictors, assignments::Tassignments, f::Symbol) where {Tpredictors <: RegressionPredictors, Tassignments <: AbstractVector}
+
+    #For each regression r
+    for r in val(dims(predictors.random_effect_level_assignments, RegressionDim))
+
+        #Update level assignments for that regression
+        update_level_assignments!(predictors, assignments, f, r)
+
+    end
+
+    return nothing
+end
+
+
+## 13. Mutation function for updating level assignments in a single regression ##
+function update_level_assignments!(predictors::Tpredictors, assignments::Tassignments, f::Symbol, r::Symbol) where {Tpredictors <: RegressionPredictors, Tassignments <: AbstractVector}
+
+    #Update the appropriate factor with the level assignments
+    predictors.random_effect_level_assignments[At(r)][:, At(f)] .= assignments
+
+    return nothing
+end
+
+
+
+
+
 #######################################
 ### EVALUATION: REGRESSION FUNCTION ###
 #######################################
@@ -1195,15 +1268,23 @@ Random.seed!(123)
 
 # 1. Setup Observation IDs
 N = 12
+
+observation_labels = DimArray([
+    ObservationDim(1:N),
+    ObservationDim(1:N)
+], regression_labels)
+
 # Mapping observations to Subject (1-4) and Item (1-3)
 
 
-subj_idx = repeat([:Subj1, :Subj2, :Subj3, :Subj4], inner=3)  # [1,1,1, 2,2,2, 3,3,3, 4,4,4]
-item_idx = repeat([:Item1, :Item2, :Item3], outer=4)          # [1,2,3, 1,2,3, 1,2,3, 1,2,3]
+subj_idx = repeat([1, 2, 3, 4], inner=3)  # [1,1,1, 2,2,2, 3,3,3, 4,4,4]
+item_idx = repeat([1, 2, 3], outer=4)          # [1,2,3, 1,2,3, 1,2,3, 1,2,3]
+
+
 
 # 2. Regression 1 Data (3 Fixed Effects)
 # X1: Intercept + 2 Predictors
-X1 = DimArray(hcat(ones(N), randn(N, 2)), (ObservationDim(1:N), fixed_effect_term_labels[At(:Regression1)]))
+X1 = DimArray(hcat(ones(N), randn(N, 2)), (observation_labels[At(regression_labels[1])], fixed_effect_term_labels[At(regression_labels[1])]))
 
 # Random Effect Design Matrices for Regression 1
 # Factor 1 (Subject) uses 2 terms (e.g., Intercept and first Predictor)
@@ -1213,7 +1294,7 @@ Z1_f2 = X1[:, 1:1]
 
 # 3. Regression 2 Data (5 Fixed Effects)
 # X2: Intercept + 4 Predictors
-X2 = DimArray(hcat(ones(N), randn(N, 4)), (ObservationDim(1:N), fixed_effect_term_labels[At(:Regression2)]))
+X2 = DimArray(hcat(ones(N), randn(N, 4)), (observation_labels[At(regression_labels[2])], fixed_effect_term_labels[At(regression_labels[2])]))
 
 # Random Effect Design Matrices for Regression 2
 # Factor 1 (Subject) uses 3 terms (e.g., Intercept and first two Predictors)
@@ -1228,19 +1309,18 @@ random_effect_design_matrices = DimArray([
     DimArray([Z2_f1, Z2_f2], random_effect_factor_labels)  # Reg 2: Factor 1, Factor 2
 ], regression_labels)
 
-level_labels = DimArray([
+level_assignments = DimArray([
     #Regression 1
-    DimArray([subj_idx, item_idx], random_effect_factor_labels),
+    DimArray([subj_idx item_idx], (observation_labels[At(regression_labels[1])], random_effect_factor_labels)),
     #Regression 2
-    DimArray([subj_idx, item_idx], random_effect_factor_labels)
+    DimArray([subj_idx item_idx], (observation_labels[At(regression_labels[2])], random_effect_factor_labels))
     ], regression_labels)
 
-predictors = RegressionPredictors(fixed_effect_design_matrices, random_effect_design_matrices, level_labels)
+predictors = RegressionPredictors(fixed_effect_design_matrices, random_effect_design_matrices, level_assignments)
 
 coefficients = rand(priors)
 
 outcomes = linear_prediction(predictors, coefficients)
-
 
 new_predictors = update_predictor(predictors, zeros(N), :Term3, :Regression1)
 new_predictors = update_predictor(new_predictors, zeros(N), :Term2)
@@ -1248,8 +1328,11 @@ new_predictors = update_predictor(new_predictors, zeros(N), :Term2)
 update_predictor!(new_predictors, ones(N), :Term2, :Regression2)
 update_predictor!(new_predictors, ones(N), :Term4)
 
+new_predictors = update_level_assignments(new_predictors, ones(N), :ItemFactor, :Regression1)
+new_predictors = update_level_assignments(new_predictors, ones(N) .+ 1, :SubjectFactor)
 
-
+update_level_assignments!(new_predictors, ones(N) .+ 2, :ItemFactor, :Regression2)
+update_level_assignments!(new_predictors, ones(N) .+ 3, :SubjectFactor)
 
 #################################
 ### EVALUATION: TURING MODELS ###
@@ -1371,4 +1454,56 @@ model = m3(deepcopy(predictors), priors)
 
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
+
+
+
+
+## 4. Model using generated level assignments, and updating them by mutation ##
+@model function m4(predictors::RegressionPredictors, priors::RegressionPrior)
+
+    ## 1. Sample coefficients ##
+    coefficients ~ priors
+
+    ## 2. Sample the item factor
+    item_assignments ~ filldist(Categorical(.3, .3, .4), 12)
+
+    ## 3. Update the item factor ##
+    updated_predictors = update_level_assignments(predictors, item_assignments, :ItemFactor)
+
+    ## 4. Calculate the outcomes ##
+    outcomes = linear_prediction(updated_predictors, coefficients)
+
+    # 5. Here the likelihood would come
+
+end
+
+model = m4(deepcopy(predictors), priors)
+
+chain = sample(model, Prior(), 1000, chain_type=VNChain)
+
+
+
+
+## 5. Model using generated level assignments, and updating them by mutation ##
+@model function m5(predictors::RegressionPredictors, priors::RegressionPrior)
+
+    ## 1. Sample coefficients ##
+    coefficients ~ priors
+
+    ## 2. Sample the item factor
+    item_assignments ~ filldist(Categorical(.3, .3, .4), 12)
+
+    ## 3. Update the item factor ##
+    update_level_assignments!(predictors, item_assignments, :ItemFactor)
+
+    ## 4. Calculate the outcomes ##
+    outcomes = linear_prediction(predictors, coefficients)
+
+    # 5. Here the likelihood would come
+
+end
+
+model = m5(deepcopy(predictors), priors)
+
+chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
