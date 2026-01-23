@@ -6,7 +6,7 @@
 # - A. Core features
 #   - 3. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
 # - B. Optimisation
-#   - 1. Minimise use of DimensionalData where not needed
+#   - 1. [!] Minimise use of DimensionalData where not needed
 #   - 2. Ensure type stability
 #   - 3. Pre-allocate random effect block assignments
 # - C. Core Utilities
@@ -19,13 +19,12 @@
 #   - 3. Make custom plotting functions (FlexiChains & MCMCChains)
 # - D. Fixes
 #   - 1. Add comments with canonical mathematical notation
-#   - 2. Change naming of Cholesky factor
-#   - 3. Allow empty fixed effects
-#   - 4. Set full, concrete type requirements everywhere possible
-#   - 5. Ensure that DualNumbers can be usued throughout
-#   - 6. Make getter functions for random effect hyperparameters
-#   - 7. Organise repository
-#   - 8. Make RegressionPrior modular, so that differnet components can be samplde one at a time
+#   - 2. [!] Change naming of Cholesky factor
+#   - 3. Set full, concrete type requirements everywhere possible
+#   - 4. Ensure that DualNumbers can be used throughout
+#   - 5. Make getter functions for random effect hyperparameters
+#   - 6. Organise repository
+#   - 7. Make RegressionPrior modular, so that differnet components can be sample one at a time
 # - E. Functionality
 #   - 1. unit tests
 #   - 2. documentation
@@ -35,16 +34,17 @@
 #   - 3. Make example with Spike-and-slab priors.
 #   - 4. Make example with latent mixture models with random effect factor level values or group assignments being latent variables
 # - G. Near future features
-#   - 1. Allow for discrete priors on fixed effects (e.g., spike-and-slab)
-#   - 2. Allow for sharing parameters across regressions (e.g., fixed effects beign identical in multiple regressions)
-#   - 3. Make constructor for combining multivariate distributions so that they sample vectors
-#   - 4. add labels for categorical predictors
+#   - 1. Make preconstructed spike-and-slab prior distribtution 
+#   - 2. Make preconstructed horseshoe prior distribution 
+#   - 3. Make preconstructed Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
+#   - 3. Allow for sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
+#   - 4. Make constructor for combining multivariate distributions so that they sample vectors
+#   - 5. Add labels for categorical predictors
 # - H. Extra
 #   - 1. Make Turing submodel alternative to rand and logpdf (and benchmark)
 # - I. Long Future features
 #   - 1. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
-#   - 2. Variance Component Analysis - letting random effect sd priors come from a multivariate distribution which can weigh between them. Would probably need to be all random effects from one big distribution.
-#   - 3. Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is inside the Turing model)
+#   - 2. Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is inside the Turing model)
 # - X. Decisions to make
 #   - 1. What should be the value in matrices with un-generated values? 0, undef or missing?
 #   - 2. What do we do with missing values in the predictors? Set them to 0, drop them, or return an error?
