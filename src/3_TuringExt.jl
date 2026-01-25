@@ -5,16 +5,23 @@
 #####################
 
 ###### SIMPLE TURING MODEL ######
-@model function simple_regression(predictors::RegressionPredictors, priors::RegressionPrior)
+@model function simple_regression(
+    predictors::RegressionPredictors, 
+    outcomes::T, 
+    priors::RegressionPrior, 
+    likelihood::SimpleRegressionLikelihood
+    ) where {T<:AbstractArray}
 
     # 1. Sample coefficients
     coefficients ~ priors
 
-    # 2. Calculate outcomes
-    outcomes = linear_combination(predictors, coefficients)
+    # 2. Calculate predictions
+    predictions = linear_combination(predictors, coefficients)
 
-    # 3. Here the likelihood would come
+    # 3. Implement likelihood function
+    outcomes ~ to_submodel(likelihood.model(predictions, outcomes, likelihood))
 
+    return outcomes
 end
 
 
