@@ -2,28 +2,29 @@
 #TODO:
  - A. Prioritised changes
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
-   - 2. [!] Upgrade RegressionPredictors and update!:
-            - Have a cateorical data field which holds the Integer version of categorical predictors and level assignments
-            - Have a root matrix which has one copy of all predictors (and categorical predictors in dummy coding format)
-            - Have design matrices as a view on the root matrix
-            - Have level assignments as a view on the categorical data field
-            - Have an InteractionDependencies object which stores for each interaction column in the design matrices which columns it depends on (and which function to use to combine them, default is multiplication)
-            - Have a TermMetaData object which stores whether a given term is categorical, and whether it is a predictor (or a level assignment), and which columns in the root matrix it corresponds to, and which columns in the design matrices are interactions that depends on it
-            - Make update! first change the categorical predictor, and then update the root matrix
-            - Make update! change the root matrix, and then update relevant interaction effect columns in the design matrices
-            - Make update! allow for receiving multiple terms to update at the same time. Only update interactions after all predictors have been updated (store all IDs that must be updated). Use a Set around the to_update flags to only do it once
-            - Make update! take a NamedTuple as input, where keys are term names and values are vector with values to update them with
-            - Make update! use different types internally for updating continuous predictors, categorical predictors, and level assignments
+   - 2. Optimise RegressionPrior
+        - Minimise use of DimensionalData where not needed
+   - 3. [!] Upgrade RegressionPredictors and update!:
+        - Have a cateorical data field which holds the Integer version of categorical predictors and level assignments
+        - Have a root matrix which has one copy of all predictors (and categorical predictors in dummy coding format)
+        - Have design matrices as a view on the root matrix
+        - Have level assignments as a view on the categorical data field
+        - Have an InteractionDependencies object which stores for each interaction column in the design matrices which columns it depends on (and which function to use to combine them, default is multiplication)
+        - Have a TermMetaData object which stores whether a given term is categorical, and whether it is a predictor (or a level assignment), and which columns in the root matrix it corresponds to, and which columns in the design matrices are interactions that depends on it
+        - Make update! first change the categorical predictor, and then update the root matrix
+        - Make update! change the root matrix, and then update relevant interaction effect columns in the design matrices
+        - Make update! allow for receiving multiple terms to update at the same time. Only update interactions after all predictors have been updated (store all IDs that must be updated). Use a Set around the to_update flags to only do it once
+        - Make update! take a NamedTuple as input, where keys are term names and values are vector with values to update them with
+        - Make update! use different types internally for updating continuous predictors, categorical predictors, and level assignments
 - B. Optimisation
-  - 1. [!] Minimise use of DimensionalData where not needed
   - 2. Ensure type stability
   - 3. Pre-allocate random effect block assignments
 - C. Core Utilities
   - 1. Make constructor function for RegressionPrior
-     A. Which construct multivariate distributions from individual priors_f
-     B. Which creates default priors or extrapolates single priors to full structure
-     C. Which checks that the inputs are all properly structured and matching
-     D. Which allows for using symbols to define the levels assignments (these are then transformed into integers)
+        - A. Which construct multivariate distributions from individual priors_f
+        - B. Which creates default priors or extrapolates single priors to full structure
+        - C. Which checks that the inputs are all properly structured and matching
+        - D. Which allows for using symbols to define the levels assignments (these are then transformed into integers)
   - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
   - 3. Make custom plotting functions (FlexiChains & MCMCChains)
 - D. Fixes
