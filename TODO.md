@@ -1,0 +1,63 @@
+
+#TODO:
+ - A. Prioritised changes
+   - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
+   - 2. [!] Upgrade RegressionPredictors and update!:
+            - Have a cateorical data field which holds the Integer version of categorical predictors and level assignments
+            - Have a root matrix which has one copy of all predictors (and categorical predictors in dummy coding format)
+            - Have design matrices as a view on the root matrix
+            - Have level assignments as a view on the categorical data field
+            - Have an InteractionDependencies object which stores for each interaction column in the design matrices which columns it depends on (and which function to use to combine them, default is multiplication)
+            - Have a TermMetaData object which stores whether a given term is categorical, and whether it is a predictor (or a level assignment), and which columns in the root matrix it corresponds to, and which columns in the design matrices are interactions that depends on it
+            - Make update! first change the categorical predictor, and then update the root matrix
+            - Make update! change the root matrix, and then update relevant interaction effect columns in the design matrices
+            - Make update! allow for receiving multiple terms to update at the same time. Only update interactions after all predictors have been updated (store all IDs that must be updated). Use a Set around the to_update flags to only do it once
+            - Make update! take a NamedTuple as input, where keys are term names and values are vector with values to update them with
+            - Make update! use different types internally for updating continuous predictors, categorical predictors, and level assignments
+- B. Optimisation
+  - 1. [!] Minimise use of DimensionalData where not needed
+  - 2. Ensure type stability
+  - 3. Pre-allocate random effect block assignments
+- C. Core Utilities
+  - 1. Make constructor function for RegressionPrior
+     A. Which construct multivariate distributions from individual priors_f
+     B. Which creates default priors or extrapolates single priors to full structure
+     C. Which checks that the inputs are all properly structured and matching
+     D. Which allows for using symbols to define the levels assignments (these are then transformed into integers)
+  - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
+  - 3. Make custom plotting functions (FlexiChains & MCMCChains)
+- D. Fixes
+  - 1. Add comments with canonical mathematical notation   
+  - 2. Set full, concrete type requirements everywhere possible
+  - 3. Ensure that DualNumbers can be used throughout
+  - 4. Make getter functions for random effect hyperparameters
+  - 5. Organise repository
+  - 6. Make RegressionPrior modular, so that differnet components can be sample one at a time
+- E. Functionality
+  - 1. unit tests
+  - 2. documentation
+- F. Usage
+  - 1. Fit the example Turing model with FlexiChains
+  - 2. Make example with Horseshoe priors.
+  - 3. Make example with Spike-and-slab priors.
+  - 4. Make example with a latent mixture model.
+  - 5. Make example with multi-step Turing model
+  - 6. Make example with categorical predictors
+- G. Near future features
+  - 1. Make preconstructed spike-and-slab prior distribtution 
+  - 2. Make preconstructed horseshoe prior distribution 
+  - 3. Make preconstructed Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
+  - 3. Allow for sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
+  - 4. Make constructor for combining multivariate distributions so that they sample vectors
+  - 5. Add labels for categorical predictors
+  - 6. Make example with splines / polynomial terms
+  - 7. Make example with completely custom functions
+- H. Extra
+  - 1. Make Turing submodel alternative to rand and logpdf (and benchmark)
+- I. Long-future and difficult features
+  - 1. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
+  - 2. Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is inside the Turing model)   - 3. Allow for estimating group memberships of random effect levels inside the Turing model
+- X. Decisions to make
+  - 1. What should be the value in matrices with un-generated values? 0, undef or missing?   
+  - 2. What do we do with missing values in the predictors? Set them to 0, drop them, or return an error? How about NaN?
+  - 3. Should fixed effects and random effect sds be stored as flat vectors or as structured vectors internally?
