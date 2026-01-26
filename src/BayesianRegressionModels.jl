@@ -12,8 +12,12 @@ using FlexiChains
 
 
 
-include("1_regression_prior.jl")
+include("1_RegressionPriors.jl")
 
-include("2_linear_combination.jl")
+include("2_RegressionPredictors.jl")
 
-include("3_TuringExt.jl")
+include("3_linear_combination.jl")
+
+include("4_TuringExt.jl")
+
+include("5_formula.jl")
