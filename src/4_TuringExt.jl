@@ -4,6 +4,8 @@
 ### TURING MODELS ###
 #####################
 
+struct SimpleRegressionLikelihood end
+
 ###### SIMPLE TURING MODEL ######
 @model function simple_regression(
     predictors::RegressionPredictors, 
