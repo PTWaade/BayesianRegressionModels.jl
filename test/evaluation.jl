@@ -682,17 +682,13 @@ random_effects = get_random_effects(coefficients)
 ## 4. Test updating predictors ##
 update_variables!(predictors, (:Age, :Treatment), (randn(12), rand(1:3, 12)), :Performance)
 
-
 ## 5. Test linear_combination ##
-#TODO:
-#outcomes = linear_combination(predictors, coefficients)
-
-
+outcomes = linear_combination(predictors, coefficients)
 
 ## 6. Test Turing models ##
 
 # 6.1. Simple regression #
-# model = simple_regression(predictors, priors)
-# chain = sample(model, Prior(), 1000, chain_type=VNChain)
+model = simple_regression(predictors, [nothing], priors, nothing)
+chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
 # 6.2. Multistep regression #

@@ -49,15 +49,17 @@ function linear_combination(
     labels::Tlabels,
     r::Symbol
     ) where {
-        Tfixed_effects, Trandom_effects, Tpredictors<:RegressionPredictors, Tlabels<:RegressionLabels
+        Tfixed_effects, Trandom_effects, Tpredictors<:AbstractVector{<:RegressionPredictors}, Tlabels<:RegressionLabels
     }
+
+    predictors_r = predictors[At(r)]
 
     return linear_combination(
         fixed_effects = fixed_effects[At(r)], 
         random_effects = random_effects, 
-        fixed_effect_design_matrix = predictors.fixed_effect_design_matrices[At(r)],
-        random_effect_design_matrices = predictors.random_effect_design_matrices[At(r)],
-        random_effect_level_assignments = predictors.random_effect_level_assignments[At(r)],
+        fixed_effect_design_matrix = predictors_r.fixed_effect_design_matrix,
+        random_effect_design_matrices = predictors_r.random_effect_design_matrices,
+        random_effect_level_assignments = predictors_r.random_effect_level_assignments,
         random_effect_term_labels = labels.random_effect_terms[At(r)],
     )
 end
@@ -70,7 +72,7 @@ function linear_combination(
     specifications::Tspecifications,
     r::Symbol
     ) where {
-        Tfixed_effects, Trandom_effects, Tpredictors<:RegressionPredictors, Tspecifications<:RegressionSpecifications
+        Tfixed_effects, Trandom_effects, Tpredictors<:AbstractVector{<:RegressionPredictors}, Tspecifications<:RegressionSpecifications
     }
 
     return linear_combination(
@@ -83,7 +85,7 @@ function linear_combination(
 end
 
 ## 3. High-level unction for calculating outcomes across a set of regressions ##
-function linear_combination(predictors::Tpredictors, coefficients::Tcoefficients) where {Tpredictors<:RegressionPredictors,Tcoefficients<:RegressionCoefficients}
+function linear_combination(predictors::Tpredictors, coefficients::Tcoefficients) where {Tpredictors<:AbstractVector{<:RegressionPredictors},Tcoefficients<:RegressionCoefficients}
 
     ## 0. Setup ##
     #Extract information

@@ -6,8 +6,9 @@ Use @view when creating the design matrices and level assignment matrices!
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - 2. Optimise RegressionPrior
         - Minimise use of DimensionalData where not needed
-   - 3. [!] Upgrade RegressionPredictors and update!
-        - Update linear_combination to accept a vector of RegressionPredictors instead of a single RegressionPredictors with vectors inside it
+   - 3. Finish Turing models
+        - Add likelihood to simple_regression
+        - Add multiple operations to multistep_regression 
 - B. Optimisation
   - 2. Ensure type stability
   - 3. Pre-allocate random effect block assignments

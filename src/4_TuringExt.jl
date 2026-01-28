@@ -8,11 +8,11 @@ struct SimpleRegressionLikelihood end
 
 ###### SIMPLE TURING MODEL ######
 @model function simple_regression(
-    predictors::RegressionPredictors, 
-    outcomes::T, 
-    priors::RegressionPrior, 
-    likelihood::SimpleRegressionLikelihood
-    ) where {T<:AbstractArray}
+    predictors::Tpredictors, 
+    outcomes::Toutcomes, 
+    priors::Tprior, 
+    likelihood::Tlikelihood
+    ) where {Tpredictors <: AbstractVector{<:RegressionPredictors}, Toutcomes<:AbstractArray, Tprior<:RegressionPrior, Tlikelihood}
 
     # 1. Sample coefficients
     coefficients ~ priors
@@ -21,7 +21,7 @@ struct SimpleRegressionLikelihood end
     predictions = linear_combination(predictors, coefficients)
 
     # 3. Implement likelihood function
-    outcomes ~ to_submodel(likelihood.model(predictions, outcomes, likelihood))
+    #outcomes ~ to_submodel(likelihood.model(predictions, outcomes, likelihood))
 
     return outcomes
 end
