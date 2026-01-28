@@ -27,6 +27,8 @@ Temporary repository for Julia package for doing Bayesian regression models, usi
 - can use centered and non-centered parameterisations for random effects, on a per-factor basis
 - can update the predictors during the Turing model, so that predictors can be inferred
 - can update random effect level assignments during the Turing model, so that level assignments can be inferred
+- can use custom expansions, such as polynomial or spline expansions of predictors, even if they created during the model
+- can use custom interaction operators beyond multiplication, even if their basis is created during the TUring model
 
 ### CONSTRAINTS ###
 - Random effect groups g must be applied across all regressions r 

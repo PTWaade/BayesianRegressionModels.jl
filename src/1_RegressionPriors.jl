@@ -3,18 +3,20 @@
 ###################################
 
 ### SETUP ###
-## Random effect parameterisation enum ##
-@enum RandomEffectParameterization Centered NonCentered
+## Random effect geometry enum ##
+@enum RandomEffectGeometry Centered NonCentered
 
 ## Dimension names ##
 abstract type RegressionDimension{T} <: DimensionalData.Dimension{T} end
 @dim RegressionDim RegressionDimension "Regression"                      #r
+@dim CategoricalVariableDim RegressionDimension "Categorical Variable"   #c
+@dim CategoricalLevelDim RegressionDimension "Random Effect Level"       #l
+@dim BasisTermDim RegressionDimension "Basis Term"                       #t
 @dim FixedEffectTermDim RegressionDimension "Fixed Effect Term"          #p
 @dim RandomEffectFactorDim RegressionDimension "Random Effect Factor"    #f
 @dim RandomEffectTermDim RegressionDimension "Random Effect Term"        #q
 @dim RandomEffectGroupDim RegressionDimension "Random Effect Group"      #g
 @dim RandomEffectBlockDim RegressionDimension "Correlation Block"        #b
-@dim RandomEffectLevelDim RegressionDimension "Random Effect Level"      #l
 @dim ObservationDim RegressionDimension "Observation"                    #n
 
 
@@ -22,17 +24,24 @@ abstract type RegressionDimension{T} <: DimensionalData.Dimension{T} end
 
 ## 1. Labels struct, containing labels for all components of the regression ##
 struct RegressionLabels{
-    Tregressions<:RegressionDim,
-    Tfixed_effect_terms<:DimVector,
-    Trandom_effect_factors<:RandomEffectFactorDim,
-    Trandom_effect_terms<:DimVector,
-    Trandom_effect_groups<:DimVector,
-    Trandom_effect_blocks<:DimVector,
-    Trandom_effect_levels<:DimVector
+    Tregressions,
+    Tcategorical_levels,
+    Tbasis_terms,
+    Tfixed_effect_terms,
+    Trandom_effect_factors,
+    Trandom_effect_terms,
+    Trandom_effect_groups,
+    Trandom_effect_blocks,
+    Tobservations
 }
-
     #Vector (R regressions) of regression labels
     regressions::Tregressions
+
+    #Vector (C categorical variables) of vectors (L categorical levels) of level labels
+    categorical_levels::Tcategorical_levels
+
+    #Vector (R regressions) of vectors (T basis terms) of term labels
+    basis_terms::Tbasis_terms
 
     #Vector (R regressions) of vectors (P fixed effect terms) of fixed effect labels
     fixed_effect_terms::Tfixed_effect_terms
@@ -49,14 +58,14 @@ struct RegressionLabels{
     #Vector (F random effect factors) of vectors (B random effect blocks) of block labels
     random_effect_blocks::Trandom_effect_blocks
 
-    #Vector (F random effect factors) of vectors (J random effect levels) of level labels
-    random_effect_levels::Trandom_effect_levels
+    #Vector (R regressions) of vectors (N observations) of observation labels
+    observations::Tobservations
 
 end
 
 
 ## 2. Specifications struct, containing information about the model ##
-struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,Tparameterisations<:AbstractVector, Tfixed_effects<:AbstractVector,Trandom_effect_sds<:AbstractVector, Trandom_effect_sds_blocks<:AbstractVector}
+struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,Tgeometries<:AbstractVector, Tfixed_effects<:AbstractVector,Trandom_effect_sds<:AbstractVector, Trandom_effect_sds_blocks<:AbstractVector}
 
     #Vector (F random effect factors) of vectors (L random effect levels) of group assignments (1:G)
     random_effect_group_assignments::Tgroups
@@ -64,8 +73,8 @@ struct RegressionSpecifications{Tgroups<:AbstractVector,Tblocks<:AbstractVector,
     #Vector (R regressions) of vectors (F random effect factors) of vectors (Q_total random effect terms) of block assignments (1:B)
     random_effect_block_assignments::Tblocks
 
-    #Vector (F random effect factors) of RandomEffectParameterization enums
-    random_effect_parameterisations::Tparameterisations
+    #Vector (F random effect factors) of RandomEffectGeometry enums
+    random_effect_geometries::Tgeometries
 
 
     #Mapping from flat vector of fixed effect coefficients to its structured format
@@ -111,7 +120,7 @@ struct RegressionCoefficients{Tfixed<:AbstractVector,Tsds<:AbstractVector,Tcorrs
     random_effect_correlations_cholesky::Tcorrs
 
     #Vector (F random effect factors) of matrices (J random effect levels, Q_total random effect terms)
-    #Stores actual values or z-scores for centered and non-centered parameterisations respectively
+    #Stores actual values or z-scores for centered and non-centered geometries respectively
     random_effects::Tranef
 
     #Model specifications
@@ -166,7 +175,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
 
     ## 4. Sample the random effects themselves, factor by factor ## 
     #Initialise storage for random effect values
-    random_effects = DimArray(Vector{DimArray{Float64,2,<:Tuple{RandomEffectLevelDim,RandomEffectTermDim}}}(undef, length(labels.random_effect_factors)), labels.random_effect_factors) 
+    random_effects = DimArray(Vector{DimArray{Float64,2,<:Tuple{CategoricalLevelDim,RandomEffectTermDim}}}(undef, length(labels.random_effect_factors)), labels.random_effect_factors) 
 
     #Go through each factor f
     for f in labels.random_effect_factors
@@ -174,11 +183,11 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
         # 4.0 setup
         #Extract information about factor f
         group_assignments_f = specifications.random_effect_group_assignments[At(f)]
-        parameterisation_f = specifications.random_effect_parameterisations[At(f)]
+        geometry_f = specifications.random_effect_geometries[At(f)]
 
         random_effect_block_labels_f = labels.random_effect_blocks[At(f)]
         random_effect_group_labels_f = labels.random_effect_groups[At(f)]
-        random_effect_level_labels_f = labels.random_effect_levels[At(f)]
+        random_effect_level_labels_f = labels.categorical_levels[At(f)]
         random_effect_term_labels_f = RandomEffectTermDim(vcat([parent(labels.random_effect_terms[At(r)][At(f)]) for r in labels.regressions]...))
 
         #Initialise empty random effects matrix for factor f
@@ -216,8 +225,8 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
                 # 4.3 If there are no terms in this block, skip to next block
                 isempty(random_effect_term_labels_b) && continue
 
-                #For non-centered parameterisations
-                if parameterisation_f == NonCentered
+                #For non-centered geometries
+                if geometry_f == NonCentered
 
                     # 4.4 Sample random effects as z-scores for this block
                     #Go through each level l
@@ -226,8 +235,8 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
                         random_effects_f[At(l), At(parent(random_effect_term_labels_b))] = randn(rng, length(random_effect_term_labels_b))
                     end
 
-                    #For centered parameterisations
-                elseif parameterisation_f == Centered
+                    #For centered geometries
+                elseif geometry_f == Centered
 
                     # 4.5 extract random effect sds for this block
                     random_effect_sds_b = view(random_effect_sds_flat, specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
@@ -278,13 +287,13 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPrior,T<:Regressio
         # 3.0 Setup ##
         #Extract information about factor f
         group_assignments_f = specifications.random_effect_group_assignments[At(f)]
-        parameterisation_f = specifications.random_effect_parameterisations[At(f)]
+        geometry_f = specifications.random_effect_geometries[At(f)]
 
         #Go through every group g
         for g in labels.random_effect_groups[At(f)]
 
             # 3.1 Identify levels belonging to this group
-            random_effect_levels_g = labels.random_effect_levels[At(f)][group_assignments_f .== g]
+            random_effect_levels_g = labels.categorical_levels[At(f)][group_assignments_f .== g]
 
             # Go through every correlation block b
             for b in labels.random_effect_blocks[At(f)]
@@ -318,8 +327,8 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPrior,T<:Regressio
                 # 3.5 If there are no terms in this block, skip to next block
                 isempty(random_effect_term_labels_b) && continue
 
-                #For non-centered parameterisations
-                if parameterisation_f == NonCentered
+                #For non-centered geometries
+                if geometry_f == NonCentered
 
                     # 3.6 Extract random effect z-scores for this block and group
                     z_scores_b = x.random_effects[At(f)][At(parent(random_effect_levels_g)), At(parent(random_effect_term_labels_b))]
@@ -327,7 +336,7 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPrior,T<:Regressio
                     # 3.7 Add logprobs for random effect z-scores, using a standard normal
                     logprob += sum(logpdf.(Normal(0, 1), z_scores_b))
 
-                elseif parameterisation_f == Centered #For centered parameterisations
+                elseif geometry_f == Centered #For centered geometries
 
                     # 3.8 extract random effect sds for this block
                     random_effect_sds_b = view(x.random_effect_sds_flat, specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
@@ -416,7 +425,7 @@ function get_fixed_effects(coefficients::RegressionCoefficients)
 end
 
 
-## 4. Materialiser function for getting actual random effects irrespective of parameterisation ##
+## 4. Materialiser function for getting actual random effects irrespective of geometry ##
 function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoefficients}
 
     ## 0. Setup ##
@@ -435,15 +444,15 @@ function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoeff
 
         ## 0.0 Setup ##
         unprocessed_random_effects_f = coefficients.random_effects[At(f)]
-        parameterisation_f = specifications.random_effect_parameterisations[At(f)]
+        geometry_f = specifications.random_effect_geometries[At(f)]
 
-        # 1. Process non-centered parameterisations
-        if parameterisation_f == NonCentered
+        # 1. Process non-centered geometries
+        if geometry_f == NonCentered
 
             # 1.0 Setup
             #Extract information
             group_assignments_f = specifications.random_effect_group_assignments[At(f)]
-            random_effect_level_labels_f = labels.random_effect_levels[At(f)]
+            random_effect_level_labels_f = labels.categorical_levels[At(f)]
             random_effect_term_labels_f = RandomEffectTermDim(vcat([parent(labels.random_effect_terms[At(r)][At(f)]) for r in labels.regressions]...))
 
             #Initialise storage for processed random effects
@@ -496,8 +505,8 @@ function get_random_effects(coefficients::Tcoefs) where {Tcoefs<:RegressionCoeff
             #Store the processed random effects for this factor
             random_effects[At(f)] = processed_random_effects_f
 
-        # 2. Process centered parameterisations
-        elseif parameterisation_f == Centered
+        # 2. Process centered geometries
+        elseif geometry_f == Centered
 
             # 2.1 Copy the random effects, since they are already actual values
             random_effects[At(f)] = copy(unprocessed_random_effects_f)

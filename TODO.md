@@ -1,21 +1,13 @@
+Use @view when creating the design matrices and level assignment matrices!
+
 
 #TODO:
  - A. Prioritised changes
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - 2. Optimise RegressionPrior
         - Minimise use of DimensionalData where not needed
-   - 3. [!] Upgrade RegressionPredictors and update!:
-        - Have a cateorical data field which holds the Integer version of categorical predictors and level assignments
-        - Have a root matrix which has one copy of all predictors (and categorical predictors in dummy coding format)
-        - Have design matrices as a view on the root matrix
-        - Have level assignments as a view on the categorical data field
-        - Have an InteractionDependencies object which stores for each interaction column in the design matrices which columns it depends on (and which function to use to combine them, default is multiplication)
-        - Have a TermMetaData object which stores whether a given term is categorical, and whether it is a predictor (or a level assignment), and which columns in the root matrix it corresponds to, and which columns in the design matrices are interactions that depends on it
-        - Make update! first change the categorical predictor, and then update the root matrix
-        - Make update! change the root matrix, and then update relevant interaction effect columns in the design matrices
-        - Make update! allow for receiving multiple terms to update at the same time. Only update interactions after all predictors have been updated (store all IDs that must be updated). Use a Set around the to_update flags to only do it once
-        - Make update! take a NamedTuple as input, where keys are term names and values are vector with values to update them with
-        - Make update! use different types internally for updating continuous predictors, categorical predictors, and level assignments
+   - 3. [!] Upgrade RegressionPredictors and update!
+        - Update linear_combination to accept a vector of RegressionPredictors instead of a single RegressionPredictors with vectors inside it
 - B. Optimisation
   - 2. Ensure type stability
   - 3. Pre-allocate random effect block assignments
@@ -53,6 +45,11 @@
   - 5. Add labels for categorical predictors
   - 6. Make example with splines / polynomial terms
   - 7. Make example with completely custom functions
+  - 8. Create standard spline expansion
+  - 9. Create example using polynomial expansion
+  - 10. Create example with cusotm expansion
+  - 11. Create example with non-multiplication interactions
+  - 12. Consider nice option for when data is shared or not shared across regressions
 - H. Extra
   - 1. Make Turing submodel alternative to rand and logpdf (and benchmark)
 - I. Long-future and difficult features
@@ -61,4 +58,5 @@
 - X. Decisions to make
   - 1. What should be the value in matrices with un-generated values? 0, undef or missing?   
   - 2. What do we do with missing values in the predictors? Set them to 0, drop them, or return an error? How about NaN?
+  - Should we allow having random effects for only a single level in a categorical predictor (say, only for Treatment_High, but not Treatment_Medium)
   - 3. Should fixed effects and random effect sds be stored as flat vectors or as structured vectors internally?
