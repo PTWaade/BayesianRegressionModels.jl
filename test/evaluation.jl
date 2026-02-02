@@ -374,43 +374,30 @@ Random.seed!(123)
 ## 1. Get number of observations ##
 n_observations_r1 = length(labels.observations[At(:Performance)])
 
-## 2. Create categorical data ##
-categorical_data_r1 = DimArray(hcat( 
 
-    #Variable 1: Treatment (3 levels)
-    rand(1:3, n_observations_r1), 
+## 2. Create basis matrix ##
+#Generate treatment cateogrical data (3 levels)
+treatment_r1 = rand(1:3, n_observations_r1)
 
-    #Variable 2: Subject (4 levels)
-    repeat([1, 2, 3, 4], inner=3),  # [1,1,1, 2,2,2, 3,3,3, 4,4,4]
-    
-    #Variable 3: Experimenter (3 levels)
-    repeat([1, 2, 3], outer=4),     # [1,2,3, 1,2,3, 1,2,3, 1,2,3]
-
-    #Variable 4: ClinicalGroup (2 levels)
-    repeat([1, 2], inner=6),        # [1,1,1, 1,1,1 2,2,2 2,2,2]
-    
-    ), (observation_labels[At(:Performance)], CategoricalVariableDim([:Treatment, :Subject, :Experimenter, :ClinicalGroup])))
-
-
-## 3. Create basis matrix ##
+#Create basis matrix
 basis_matrix_r1 = DimArray(hcat(
     
-# Variable 1: Intercept
+    # Variable 1: Intercept
     ones(n_observations_r1), 
 
     # Variable 2: Age
     randn(n_observations_r1),    
 
     # Variable 3: Treatment_Medium  
-    categorical_data_r1[:, At(:Treatment)] .== 2,  
+    treatment_r1 .== 2,  
 
     # Variable 4: Treatment_High
-    categorical_data_r1[:, At(:Treatment)] .== 3   
+    treatment_r1 .== 3   
 
 ), (observation_labels[At(:Performance)], basis_term_labels[At(:Performance)]))
 
 
-## 4. Create fixed effects design matrix ##
+## 3. Create fixed effects design matrix ##
 fixed_effects_design_matrix_r1 = DimArray(hcat(
 
     #The basis terms are all there
@@ -425,7 +412,7 @@ fixed_effects_design_matrix_r1 = DimArray(hcat(
 ), (observation_labels[At(:Performance)], fixed_effect_term_labels[At(:Performance)]))
 
 
-## 5. Create random effect design matrices ##
+## 4. Create random effect design matrices ##
 random_effect_design_matrices_r1 = DimArray([
     
     # Factor 1: Subject (3 terms)
@@ -437,11 +424,19 @@ random_effect_design_matrices_r1 = DimArray([
 ], random_effect_factor_labels)
 
 
-## 6. Create level assignments for random effects ##
-random_effect_level_assignments_r1 = view(categorical_data_r1, :, At([:Subject, :Experimenter]))
+## 5. Create level assignments for random effects ##
+random_effect_level_assignments_r1 = DimArray(hcat( 
+
+    #Variable 2: Subject (4 levels)
+    repeat([1, 2, 3, 4], inner=3),  # [1,1,1, 2,2,2, 3,3,3, 4,4,4]
+    
+    #Variable 3: Experimenter (3 levels)
+    repeat([1, 2, 3], outer=4),     # [1,2,3, 1,2,3, 1,2,3, 1,2,3]
+    
+    ), (observation_labels[At(:Performance)], CategoricalVariableDim([:Subject, :Experimenter])))
 
 
-## 7. Create interaction recipes ##
+## 6. Create interaction recipes ##
 fixed_effects_interaction_recipes_r1 = [
         nothing, nothing, nothing, nothing, # Terms 1-4 are basis terms
         InteractionRecipe([2, 3], MultiplicationOperator()),       # Term 5: Age (2) * Treatment_Medium (3)
@@ -456,67 +451,62 @@ random_effects_interaction_recipes_r1 = [
         Union{Nothing, InteractionRecipe{MultiplicationOperator}}[nothing for _ in 1:2]       
     ]
 
-## 8. Create info for each term ##
+
+## 7. Create info for each term ##
 terms_info_r1 = (
 
-    Intercept = ContinuousTermInfo(
+    Intercept = TermInfo(
+        basis_expansion_type = IdentityExpansion(),    
         basis_matrix_indices = [1], 
         fixed_effects_indices = [1],
         random_effects_indices = [(1, [1]), (2, [1])],
-        basis_expansion_type = IdentityExpansion(),
-        # The intercept does not affect any interactions
+        level_assignments_idx = 0,
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])),
     
-    Age = ContinuousTermInfo(
+    Age = TermInfo(
+        basis_expansion_type = IdentityExpansion(),
         basis_matrix_indices = [2], 
         fixed_effects_indices = [2],
         random_effects_indices = [(2, [2])],
-        basis_expansion_type = IdentityExpansion(),
-        # Age affects two interactions in the fixed effects design matrix, columns 5 and 6
+        level_assignments_idx = 0,
         dependent_interaction_indices = DependentInteractionIndices([5, 6], Tuple{Int, Int}[]) 
     ),
     
-    Treatment = CategoricalTermInfo(
-        categorical_variables_index = 1,      
+    Treatment = TermInfo(
+        basis_expansion_type = DummyCodeExpansion(),
         basis_matrix_indices = [3, 4], 
         fixed_effects_indices = [3, 4],
         random_effects_indices = [(1, [2, 3])],
-        basis_expansion_type = DummyCodeExpansion(),
-        # Treatment affects two interactions in the fixed effects design matrix, columns 5 and 6
+        level_assignments_idx = 0, 
         dependent_interaction_indices = DependentInteractionIndices([5, 6], Tuple{Int, Int}[])
     ),
 
     # Subject info
-    Subject = CategoricalTermInfo(
-        categorical_variables_index = 2,  
-        #Subject is not used as predictor, so is not in the basis matrix
+    Subject = TermInfo(
+        basis_expansion_type = DummyCodeExpansion(),
         basis_matrix_indices = Int[], 
         fixed_effects_indices = Int[],
         random_effects_indices =Tuple{Int, Vector{Int}}[],
-        basis_expansion_type = DummyCodeExpansion(),
-        # Subject does not affect any interactions
+        level_assignments_idx = 1,  
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
     ),
 
     # Experimenter info
-    Experimenter = CategoricalTermInfo(
-        categorical_variables_index = 3,  
-        # Experimenter is not used as predictor, so is not in the basis matrix
+    Experimenter = TermInfo(
+        basis_expansion_type = DummyCodeExpansion(),
         basis_matrix_indices = Int[], 
         fixed_effects_indices = Int[],
         random_effects_indices =Tuple{Int, Vector{Int}}[],
-        basis_expansion_type = DummyCodeExpansion(),
-        # Experimenter does not affect any interactions
+        level_assignments_idx = 2,  
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
     )
 )
 
-## 9. Create container for marking interaction effects for being updated ##
+## 8. Create container for marking interaction effects for being updated ##
 interaction_udpate_markers_r1 = InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r1)])
 
 ## 9. Instantiate predictors ##
 predictors_r1 = RegressionPredictors(
-    categorical_data_r1,
     basis_matrix_r1,
     fixed_effects_design_matrix_r1,
     random_effect_design_matrices_r1,
@@ -531,19 +521,7 @@ predictors_r1 = RegressionPredictors(
 ## 1. Get number of observations ##
 n_observations_r2 = length(labels.observations[At(:Accuracy)])
 
-## 2. Create categorical data ##
-categorical_data_r2 = DimArray(hcat( 
-
-    #Variable 2: Subject (4 levels)
-    repeat([1, 2, 3, 4], inner=4),  # [1,1,1,1, 2,2,2,2, 3,3,3,3, 4,4,44,]
-
-    #Variable 4: ClinicalGroup (2 levels)
-    repeat([1, 2], inner=8),        # [1,1,1,1,1,1 1,1,1 2,2,2 2,2,2]
-    
-    ), (observation_labels[At(:Accuracy)], CategoricalVariableDim([:Subject, :ClinicalGroup])))
-
-
-## 3. Create basis matrix ##
+## 2. Create basis matrix ##
 basis_matrix_r2 = DimArray(hcat(
     
     # Variable 1: Intercept
@@ -558,7 +536,7 @@ basis_matrix_r2 = DimArray(hcat(
 ), (observation_labels[At(:Accuracy)], basis_term_labels[At(:Accuracy)]))
 
 
-## 4. Create fixed effects design matrix ##
+## 3. Create fixed effects design matrix ##
 fixed_effects_design_matrix_r2 = DimArray(hcat(
 
     # Terms 1-3: Intercept, Age, BMI
@@ -570,7 +548,7 @@ fixed_effects_design_matrix_r2 = DimArray(hcat(
 ), (observation_labels[At(:Accuracy)], fixed_effect_term_labels[At(:Accuracy)]))
 
 
-## 5. Create random effect design matrices ##
+## 4. Create random effect design matrices ##
 random_effect_design_matrices_r2 = DimArray([
     
     # Factor 1: Subject (4 terms: Intercept, Age, BMI, Age_x_BMI)
@@ -582,10 +560,17 @@ random_effect_design_matrices_r2 = DimArray([
 ], random_effect_factor_labels)
 
 
-## 6. Create level assignments for random effects ##
-random_effect_level_assignments_r2 = view(categorical_data_r2, :, At([:Subject]))
+## 5. Create level assignments for random effects ##
+random_effect_level_assignments_r2 = DimArray(hcat( 
 
-## 7. Create interaction recipes ##
+    #Variable 2: Subject (4 levels)
+    repeat([1, 2, 3, 4], inner=4),  # [1,1,1,1, 2,2,2,2, 3,3,3,3, 4,4,44,]
+    
+    ), (observation_labels[At(:Accuracy)], CategoricalVariableDim([:Subject])))
+
+
+
+## 6. Create interaction recipes ##
 fixed_effects_interaction_recipes_r2 = [nothing, nothing, nothing, InteractionRecipe([2, 3], MultiplicationOperator())]  # 4: Age (2) * BMI (3)
 
 random_effects_interaction_recipes_r2 = [
@@ -596,61 +581,53 @@ random_effects_interaction_recipes_r2 = [
     Vector{Union{Nothing, InteractionRecipe}}()
 ]
 
-## 8. Create info for each term ##
+## 7. Create info for each term ##
 terms_info_r2 = (
 
-    Intercept = ContinuousTermInfo(
+    Intercept = TermInfo(
+        basis_expansion_type = IdentityExpansion(),
         basis_matrix_indices = [1], 
         fixed_effects_indices = [1],
         random_effects_indices = [(1, [1]), (2, [1])],
-        basis_expansion_type = IdentityExpansion(),
-        #The intercept does not affect any interactions
+        level_assignments_idx = 0,
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
     ),
     
-    Age = ContinuousTermInfo(
+    Age = TermInfo(
+        basis_expansion_type = IdentityExpansion(),
         basis_matrix_indices = [2], 
         fixed_effects_indices = [2],
         random_effects_indices = [(1, [2])],
-        basis_expansion_type = IdentityExpansion(),
-        # Age is part of the interaction in the fixed effects design amtrix (col 4) and in the Subject random effects design matrix (Factor 1, col 4)
+        level_assignments_idx = 0,
+        # Age is part of the interaction in the fixed effects design matrix (col 4) and in the Subject random effects design matrix (Factor 1, col 4)
         dependent_interaction_indices = DependentInteractionIndices([4], [(1, 4)]) 
     ),
     
-    BMI = ContinuousTermInfo(
+    BMI = TermInfo(
+        basis_expansion_type = IdentityExpansion(),
         basis_matrix_indices = [3], 
         fixed_effects_indices = [3],
         random_effects_indices = [(1, [3])],
-        basis_expansion_type = IdentityExpansion(),
+        level_assignments_idx = 0,
         # BMI is part of the interaction in Fixed (col 4) and Subject Random (Factor 1, col 4)
         dependent_interaction_indices = DependentInteractionIndices([4], [(1, 4)])
     ),
 
-    Subject = CategoricalTermInfo(
-        categorical_variables_index = 1,  
+    Subject = TermInfo(
+        basis_expansion_type = DummyCodeExpansion(),
         basis_matrix_indices = Int[], 
         fixed_effects_indices = Int[],
         random_effects_indices = Tuple{Int, Vector{Int}}[],
-        basis_expansion_type = DummyCodeExpansion(),
+        level_assignments_idx = 1,  
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
     ),
-
-    ClinicalGroup = CategoricalTermInfo(
-        categorical_variables_index = 2,  
-        basis_matrix_indices = Int[], 
-        fixed_effects_indices = Int[],
-        random_effects_indices = Tuple{Int, Vector{Int}}[],
-        basis_expansion_type = DummyCodeExpansion(),
-        dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
-    )
 )
 
-## 9. Create container for marking interaction effects for being updated ##
+## 8. Create container for marking interaction effects for being updated ##
 interaction_udpate_markers_r2 = InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r2)])
 
-## 10. Instantiate predictors ##
+## 9. Instantiate predictors ##
 predictors_r2 = RegressionPredictors(
-    categorical_data_r2,
     basis_matrix_r2,
     fixed_effects_design_matrix_r2,
     random_effect_design_matrices_r2,

@@ -142,31 +142,12 @@ struct InteractionUpdateMarkers
     random_effects::Vector{BitSet}
 end
 
-## 1.4 Abstract type for containers of term information ##
-abstract type AbstractTermInfo end
 
-## 1.5 Type for continuous terms ##
-Base.@kwdef struct ContinuousTermInfo{T<:AbstractBasisExpansion} <: AbstractTermInfo
-    #The column index in the basis matrix
-    basis_matrix_indices::Vector{Int}
-
-    #Vector (basis matrix column indices) of vectors (corresponding design matrix column indices)
-    fixed_effects_indices::Vector{Int}
-
-    #Vector (basis matrix column indices) of vectors (F affected random effect factors) of Tuples (factor index, vector of corresponding design matrix columns)
-    random_effects_indices::Vector{Tuple{Int,Vector{Int}}}
-
-    #Type governing how the basis values are expanded, default identity
-    basis_expansion_type::T = IdentityExpansion()
-
-    #Column indices in the design matrices for interactions that depend on this term
-    dependent_interaction_indices::DependentInteractionIndices
-end
-
-## 1.7 Type for categorical terms ##
-Base.@kwdef struct CategoricalTermInfo{T<:AbstractBasisExpansion} <: AbstractTermInfo
-    #The column index in the categorical data
-    categorical_variables_index::Int
+## 1.7 Type for carrying information about a term ##
+Base.@kwdef struct TermInfo{T<:AbstractBasisExpansion}
+    
+    #Type governing how the basis values are expanded
+    basis_expansion_type::T
 
     #The columns in the basis batrix which contain the different levels
     basis_matrix_indices::Vector{Int}
@@ -177,8 +158,8 @@ Base.@kwdef struct CategoricalTermInfo{T<:AbstractBasisExpansion} <: AbstractTer
     #Vector (basis matrix column indices) of vectors (F affected random effect factors) of Tuples (factor index, vector of corresponding design matrix columns)
     random_effects_indices::Vector{Tuple{Int,Vector{Int}}}
 
-    #Type governing how the basis values are expanded, default is dummy coding
-    basis_expansion_type::T = DummyCodeExpansion()
+    #The column index in the level assignments matrix (0 means no level assignments)
+    level_assignments_idx::Int
 
     #Column indices in the design matrices for interactions that depend on this term
     dependent_interaction_indices::DependentInteractionIndices
@@ -198,7 +179,6 @@ end
 
 # 3. Struct for keeping predictors and all necessary information #
 struct RegressionPredictors{
-    Tcategorical_variables<:AbstractMatrix{Int},
     Tbasis_matrices<:AbstractMatrix{<:Real},
     Tfixedeffects<:AbstractMatrix{<:Real},
     Trandomeffects<:AbstractVector{<:AbstractMatrix{<:Real}},
@@ -207,9 +187,6 @@ struct RegressionPredictors{
     Tfixed_interactions <: Vector{<:Union{Nothing, <:InteractionRecipe}}, 
     Trandom_interactions <: Vector{<:Vector{<:Union{Nothing, <:InteractionRecipe}}}
     }
-
-    #Matrix (N observations x number of categorical variables) which holds the categorical data in integer form
-    categorical_variables::Tcategorical_variables
 
     #Matrix (N observations x P+Q total number of predictor terms) which holds all predictors (categorical data in dummy code format) for use in the design matrices
     basis_matrix::Tbasis_matrices
@@ -246,11 +223,10 @@ function update_matrices!(
     predictors::Tpredictors, 
     info::Tinfo, 
     values::Tvalues
-) where {Tpredictors <: RegressionPredictors, Tinfo <: AbstractTermInfo, Tvalues <: AbstractVector}
+) where {Tpredictors <: RegressionPredictors, Tinfo <: TermInfo, Tvalues <: AbstractVector}
 
     # 1.1 Update basis matrix
     expand_into_basis_matrix!(values, predictors.basis_matrix, info.basis_matrix_indices, info.basis_expansion_type)
-
 
     # 1.2 Update fixed effects design matrix
     #If there are fixed effect indices to update
@@ -265,39 +241,17 @@ function update_matrices!(
         #Copy in values from the basis matrix
         view(predictors.random_effect_design_matrices[f], :, design_matrix_indices) .= view(predictors.basis_matrix, :, info.basis_matrix_indices)
     end
-end
 
-
-## 2. Low-level dispatches for distinguishing categorical and continuous terms ##
-# 2.1 Continuous terms #
-function update_variables!(
-    predictors::Tpredictors, 
-    info::ContinuousTermInfo, 
-    values::Tvalues
-    ) where {Tvalues<:AbstractVector, Tpredictors <:RegressionPredictors}
-    
-    # Update basis and design matrices
-    update_matrices!(predictors, info, values)
-
-end
-
-# 2.2 Categorical terms #
-function update_variables!(
-    predictors::Tpredictors, 
-    info::CategoricalTermInfo, 
-    values::Tvalues
-    ) where {Tpredictors<:RegressionPredictors, Tvalues<:AbstractVector{Int}}
-    
-    # Update the categorical variables matrix
-    predictors.categorical_variables[:, info.categorical_variables_index] .= values
-
-    # Update basis and design matrices
-    update_matrices!(predictors, info, values)
+    # 1.4 If there is a level assignments index
+    if info.level_assignments_idx > 0
+        # Update the level assignments matrix
+        predictors.random_effect_level_assignments[:, info.level_assignments_idx] .= values
+    end
 
 end
 
 
-## 3. Mediun-level dispatch for updating multiple variables in the predictors object ##
+## 2. Mediun-level dispatch for updating multiple variables in the predictors object ##
 function update_variables!(
     predictors::Tpredictors, 
     terms::Tuple{Vararg{Symbol}}, 
@@ -318,7 +272,7 @@ function update_variables!(
         term_info = predictors.terms_info[term]
 
         #Update the main effects
-        update_variables!(predictors, term_info, value)
+        update_matrices!(predictors, term_info, value)
 
         #Mark affected fixed effect columns
         union!(interaction_update_markers.fixed_effects, term_info.dependent_interaction_indices.fixed_effects)

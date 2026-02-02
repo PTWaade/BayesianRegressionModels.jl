@@ -4,10 +4,9 @@ Use @view when creating the design matrices and level assignment matrices!
 #TODO:
  - Prioritised changes
    - MISC
-      - Get rid of categorical_variables
       - Restructure design matrix info
-      - Remove difference between continuous and categorical
       - Add an initialised flag
+      - Make instead of polynomial then an expansions which just takes a set of operators
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - 2. Optimise RegressionPrior
         - Minimise use of DimensionalData where not needed
