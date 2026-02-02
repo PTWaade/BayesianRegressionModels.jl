@@ -461,16 +461,16 @@ terms_info_r1 = (
 
     Intercept = ContinuousTermInfo(
         basis_matrix_indices = [1], 
-        fixed_effects_indices = [[1]],
-        random_effects_indices = [[(1, [1]), (2, [1])]],
+        fixed_effects_indices = [1],
+        random_effects_indices = [(1, [1]), (2, [1])],
         basis_expansion_type = IdentityExpansion(),
         # The intercept does not affect any interactions
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])),
     
     Age = ContinuousTermInfo(
         basis_matrix_indices = [2], 
-        fixed_effects_indices = [[2]],
-        random_effects_indices = [[(2, [2])]],
+        fixed_effects_indices = [2],
+        random_effects_indices = [(2, [2])],
         basis_expansion_type = IdentityExpansion(),
         # Age affects two interactions in the fixed effects design matrix, columns 5 and 6
         dependent_interaction_indices = DependentInteractionIndices([5, 6], Tuple{Int, Int}[]) 
@@ -479,8 +479,8 @@ terms_info_r1 = (
     Treatment = CategoricalTermInfo(
         categorical_variables_index = 1,      
         basis_matrix_indices = [3, 4], 
-        fixed_effects_indices = [[3], [4]],
-        random_effects_indices = [[(1, [2])], [(1, [3])]],
+        fixed_effects_indices = [3, 4],
+        random_effects_indices = [(1, [2, 3])],
         basis_expansion_type = DummyCodeExpansion(),
         # Treatment affects two interactions in the fixed effects design matrix, columns 5 and 6
         dependent_interaction_indices = DependentInteractionIndices([5, 6], Tuple{Int, Int}[])
@@ -491,8 +491,8 @@ terms_info_r1 = (
         categorical_variables_index = 2,  
         #Subject is not used as predictor, so is not in the basis matrix
         basis_matrix_indices = Int[], 
-        fixed_effects_indices = Vector{Int}[],
-        random_effects_indices = Vector{Tuple{Int, Vector{Int}}}[],
+        fixed_effects_indices = Int[],
+        random_effects_indices =Tuple{Int, Vector{Int}}[],
         basis_expansion_type = DummyCodeExpansion(),
         # Subject does not affect any interactions
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
@@ -503,8 +503,8 @@ terms_info_r1 = (
         categorical_variables_index = 3,  
         # Experimenter is not used as predictor, so is not in the basis matrix
         basis_matrix_indices = Int[], 
-        fixed_effects_indices = Vector{Int}[],
-        random_effects_indices = Vector{Tuple{Int, Vector{Int}}}[],
+        fixed_effects_indices = Int[],
+        random_effects_indices =Tuple{Int, Vector{Int}}[],
         basis_expansion_type = DummyCodeExpansion(),
         # Experimenter does not affect any interactions
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
@@ -601,8 +601,8 @@ terms_info_r2 = (
 
     Intercept = ContinuousTermInfo(
         basis_matrix_indices = [1], 
-        fixed_effects_indices = [[1]],
-        random_effects_indices = [[(1, [1])], [(2, [1])]],
+        fixed_effects_indices = [1],
+        random_effects_indices = [(1, [1]), (2, [1])],
         basis_expansion_type = IdentityExpansion(),
         #The intercept does not affect any interactions
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
@@ -610,8 +610,8 @@ terms_info_r2 = (
     
     Age = ContinuousTermInfo(
         basis_matrix_indices = [2], 
-        fixed_effects_indices = [[2]],
-        random_effects_indices = [[(1, [2])]],
+        fixed_effects_indices = [2],
+        random_effects_indices = [(1, [2])],
         basis_expansion_type = IdentityExpansion(),
         # Age is part of the interaction in the fixed effects design amtrix (col 4) and in the Subject random effects design matrix (Factor 1, col 4)
         dependent_interaction_indices = DependentInteractionIndices([4], [(1, 4)]) 
@@ -619,8 +619,8 @@ terms_info_r2 = (
     
     BMI = ContinuousTermInfo(
         basis_matrix_indices = [3], 
-        fixed_effects_indices = [[3]],
-        random_effects_indices = [[(1, [3])]],
+        fixed_effects_indices = [3],
+        random_effects_indices = [(1, [3])],
         basis_expansion_type = IdentityExpansion(),
         # BMI is part of the interaction in Fixed (col 4) and Subject Random (Factor 1, col 4)
         dependent_interaction_indices = DependentInteractionIndices([4], [(1, 4)])
@@ -629,8 +629,8 @@ terms_info_r2 = (
     Subject = CategoricalTermInfo(
         categorical_variables_index = 1,  
         basis_matrix_indices = Int[], 
-        fixed_effects_indices = Vector{Int}[],
-        random_effects_indices = Vector{Tuple{Int, Vector{Int}}}[],
+        fixed_effects_indices = Int[],
+        random_effects_indices = Tuple{Int, Vector{Int}}[],
         basis_expansion_type = DummyCodeExpansion(),
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
     ),
@@ -638,8 +638,8 @@ terms_info_r2 = (
     ClinicalGroup = CategoricalTermInfo(
         categorical_variables_index = 2,  
         basis_matrix_indices = Int[], 
-        fixed_effects_indices = Vector{Int}[],
-        random_effects_indices = Vector{Tuple{Int, Vector{Int}}}[],
+        fixed_effects_indices = Int[],
+        random_effects_indices = Tuple{Int, Vector{Int}}[],
         basis_expansion_type = DummyCodeExpansion(),
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
     )

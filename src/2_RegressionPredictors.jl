@@ -151,10 +151,10 @@ Base.@kwdef struct ContinuousTermInfo{T<:AbstractBasisExpansion} <: AbstractTerm
     basis_matrix_indices::Vector{Int}
 
     #Vector (basis matrix column indices) of vectors (corresponding design matrix column indices)
-    fixed_effects_indices::Vector{Vector{Int}}
+    fixed_effects_indices::Vector{Int}
 
     #Vector (basis matrix column indices) of vectors (F affected random effect factors) of Tuples (factor index, vector of corresponding design matrix columns)
-    random_effects_indices::Vector{Vector{Tuple{Int,Vector{Int}}}}
+    random_effects_indices::Vector{Tuple{Int,Vector{Int}}}
 
     #Type governing how the basis values are expanded, default identity
     basis_expansion_type::T = IdentityExpansion()
@@ -172,10 +172,10 @@ Base.@kwdef struct CategoricalTermInfo{T<:AbstractBasisExpansion} <: AbstractTer
     basis_matrix_indices::Vector{Int}
 
     #Vector (basis matrix column indices) of vectors (corresponding design matrix column indices)
-    fixed_effects_indices::Vector{Vector{Int}}
+    fixed_effects_indices::Vector{Int}
 
     #Vector (basis matrix column indices) of vectors (F affected random effect factors) of Tuples (factor index, vector of corresponding design matrix columns)
-    random_effects_indices::Vector{Vector{Tuple{Int,Vector{Int}}}}
+    random_effects_indices::Vector{Tuple{Int,Vector{Int}}}
 
     #Type governing how the basis values are expanded, default is dummy coding
     basis_expansion_type::T = DummyCodeExpansion()
@@ -248,29 +248,22 @@ function update_matrices!(
     values::Tvalues
 ) where {Tpredictors <: RegressionPredictors, Tinfo <: AbstractTermInfo, Tvalues <: AbstractVector}
 
-    # Update basis matrix
+    # 1.1 Update basis matrix
     expand_into_basis_matrix!(values, predictors.basis_matrix, info.basis_matrix_indices, info.basis_expansion_type)
 
-    #For each basis column
-    for (i, basis_matrix_idx) in enumerate(info.basis_matrix_indices)
 
-        # Create a view of the data in the basis matrix
-        basis_matrix_view = view(predictors.basis_matrix, :, basis_matrix_idx)
+    # 1.2 Update fixed effects design matrix
+    #If there are fixed effect indices to update
+    if !isempty(info.fixed_effects_indices)
+        #Copy in values from the basis matrix
+        view(predictors.fixed_effect_design_matrix, :, info.fixed_effects_indices) .= view(parent(predictors.basis_matrix), :, info.basis_matrix_indices)
+    end
 
-        # For the inheriting column in the fixed effect design matrix (vector is empty if it is not used)
-        for design_matrix_idx in info.fixed_effects_indices[i]
-            # Set the value
-            predictors.fixed_effect_design_matrix[:, design_matrix_idx] .= basis_matrix_view
-        end
-
-        # For each set of random effect factor and inheriting columns
-        for (factor_idx, design_matrix_indices) in info.random_effects_indices[i]
-            # For the inheriting column in the fixed effect design matrix (vector is empty if it is not used)
-            for design_matrix_indx in design_matrix_indices
-                #Set the value
-                predictors.random_effect_design_matrices[factor_idx][:, design_matrix_indx] .= basis_matrix_view
-            end
-        end
+    # 1.3 Update each of the random effect design matrices
+    #For indices in each factor f
+    for (f, design_matrix_indices) in info.random_effects_indices
+        #Copy in values from the basis matrix
+        view(predictors.random_effect_design_matrices[f], :, design_matrix_indices) .= view(predictors.basis_matrix, :, info.basis_matrix_indices)
     end
 end
 
