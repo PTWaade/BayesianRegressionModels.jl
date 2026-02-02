@@ -2,62 +2,85 @@ Use @view when creating the design matrices and level assignment matrices!
 
 
 #TODO:
- - A. Prioritised changes
+ - Prioritised changes
+   - MISC
+      - Get rid of categorical_variables
+      - Restructure design matrix info
+      - Remove difference between continuous and categorical
+      - Add an initialised flag
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - 2. Optimise RegressionPrior
         - Minimise use of DimensionalData where not needed
    - 3. Finish Turing models
         - Add likelihood to simple_regression
         - Add multiple operations to multistep_regression 
-- B. Optimisation
-  - 2. Ensure type stability
-  - 3. Pre-allocate random effect block assignments
-- C. Core Utilities
-  - 1. Make constructor function for RegressionPrior
-        - A. Which construct multivariate distributions from individual priors_f
-        - B. Which creates default priors or extrapolates single priors to full structure
-        - C. Which checks that the inputs are all properly structured and matching
-        - D. Which allows for using symbols to define the levels assignments (these are then transformed into integers)
-  - 2. Make custom summary functionalities (FlexiChains & MCMCChains)
-  - 3. Make custom plotting functions (FlexiChains & MCMCChains)
-- D. Fixes
-  - 1. Add comments with canonical mathematical notation   
-  - 2. Set full, concrete type requirements everywhere possible
-  - 3. Ensure that DualNumbers can be used throughout
-  - 4. Make getter functions for random effect hyperparameters
-  - 5. Organise repository
-  - 6. Make RegressionPrior modular, so that differnet components can be sample one at a time
-- E. Functionality
-  - 1. unit tests
-  - 2. documentation
-- F. Usage
-  - 1. Fit the example Turing model with FlexiChains
-  - 2. Make example with Horseshoe priors.
-  - 3. Make example with Spike-and-slab priors.
-  - 4. Make example with a latent mixture model.
-  - 5. Make example with multi-step Turing model
-  - 6. Make example with categorical predictors
-- G. Near future features
-  - 1. Make preconstructed spike-and-slab prior distribtution 
-  - 2. Make preconstructed horseshoe prior distribution 
-  - 3. Make preconstructed Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
-  - 3. Allow for sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
-  - 4. Make constructor for combining multivariate distributions so that they sample vectors
-  - 5. Add labels for categorical predictors
-  - 6. Make example with splines / polynomial terms
-  - 7. Make example with completely custom functions
-  - 8. Create standard spline expansion
-  - 9. Create example using polynomial expansion
-  - 10. Create example with cusotm expansion
-  - 11. Create example with non-multiplication interactions
-  - 12. Consider nice option for when data is shared or not shared across regressions
-- H. Extra
-  - 1. Make Turing submodel alternative to rand and logpdf (and benchmark)
-- I. Long-future and difficult features
-  - 1. Structured random effects across levels (e.g., gaussian process, AR1, etc.)
-  - 2. Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is inside the Turing model)   - 3. Allow for estimating group memberships of random effect levels inside the Turing model
-- X. Decisions to make
-  - 1. What should be the value in matrices with un-generated values? 0, undef or missing?   
-  - 2. What do we do with missing values in the predictors? Set them to 0, drop them, or return an error? How about NaN?
+- Features to consider
+  - Should random effect betas be stored with regression before factor ?
+  - How about orinal models?
+  - SparseArrays? LazyArrays?
+  - QR decomposition ? Orthogonal polar decomposition?
+  - Change fixed/random to population/group ?
+  - Multi-membership (i.e., an observation can be two random effect levels, and the random effect for that observationis the average or weighted sum of the two levels it belongs to)
+  - Monotonic effects
+  - Measurement error
+  - Imputing missing predictors
+  - Meta-analysis
+  - Weighted regression (different weights on different observations)
+  - Make example with sequential sampling model as family
+  - Mixture models
+  - Re-parameterise the intercept:
+    (brms): By default, the population-level intercept (if incorporated) is estimated separately and not as part of population-level parameter vector b As a result, priors on the intercept also have to be specified separately. Furthermore, to increase sampling efficiency, the population-level design matrix X is centered around its column means X_means if the intercept is incorporated. This leads to a temporary bias in the intercept equal to <X_means, b>, where <,> is the scalar product. The bias is corrected after fitting the model, but be aware that you are effectively defining a prior on the intercept of the centered design matrix not on the real intercept. You can turn off this special handling of the intercept by setting argument center to FALSE. For more details on setting priors on population-level intercepts, see set_prior.This behavior can be avoided by using the reserved (and internally generated) variable Intercept. Instead of y ~ x, you may write y ~ 0 + Intercept + x. This way, priors can be defined on the real intercept, directly. In addition, the intercept is just treated as an ordinary population-level effect and thus priors defined on b will also apply to it. Note that this parameterization may be less efficient than the default parameterization discussed above.
+  - Allow for sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
+- Optimisation
+  - Ensure type stability
+  - Pre-allocate random effect block assignments
+- Core Utilities
+  - Make constructor function for RegressionPrior
+        - Which construct multivariate distributions from individual priors_f
+        - Which creates default priors or extrapolates single priors to full structure
+        - Which checks that the inputs are all properly structured and matching
+        - Which allows for using symbols to define the levels assignments (these are then transformed into integers)
+  - Make custom summary functionalities (FlexiChains & MCMCChains)
+  - Make custom plotting functions (FlexiChains & MCMCChains)
+- Fixes
+  - Add comments with canonical mathematical notation   
+  - Set full, concrete type requirements everywhere possible
+  - Ensure that DualNumbers can be used throughout
+  - Make getter functions for random effect hyperparameters
+  - Organise repository
+  - Make RegressionPrior modular, so that differnet components can be sample one at a time
+- Functionality
+  - unit tests
+  - documentation
+- Usage
+  - Fit the example Turing model with FlexiChains
+  - Make example with Horseshoe priors.
+  - Make example with Spike-and-slab priors.
+  - Make example with a latent mixture model.
+  - Make example with multi-step Turing model
+  - Make example with categorical predictors
+- Near future features
+  - Make preconstructed spike-and-slab prior distribtution 
+  - Make preconstructed horseshoe prior distribution 
+  - Make preconstructed Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
+  - Make constructor for combining multivariate distributions so that they sample vectors
+  - Add labels for categorical predictors
+  - Make example with splines / polynomial terms
+  - Make example with completely custom functions
+  - Create standard spline expansion
+  - Create example using polynomial expansion
+  - Create example with cusotm expansion
+  - Create example with non-multiplication interactions
+  - Consider nice option for when data is shared or not shared across regressions
+- Extra
+  - Make Turing submodel alternative to rand and logpdf (and benchmark)
+- Long-future and difficult features
+  - Structured random effects across levels (e.g., gaussian process, AR1, etc.)
+  - Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is inside the Turing model)   - 3. Allow for estimating group memberships of random effect levels inside the Turing model
+- Not planned features
+  - "Category-specific random effects", where there can be random effects for only some levels of a categorical predictor (e.g., Treatment_High)
+- Decisions to make
+  - What should be the value in matrices with un-generated values? 0, undef or missing?   
+  - What do we do with missing values in the predictors? Set them to 0, drop them, or return an error? How about NaN?
   - Should we allow having random effects for only a single level in a categorical predictor (say, only for Treatment_High, but not Treatment_Medium)
-  - 3. Should fixed effects and random effect sds be stored as flat vectors or as structured vectors internally?
+  - Should fixed effects and random effect sds be stored as flat vectors or as structured vectors internally?
