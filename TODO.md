@@ -4,7 +4,6 @@ Use @view when creating the design matrices and level assignment matrices!
 #TODO:
  - Prioritised changes
    - MISC
-      - Allow using 0 for only keeping some parts of an expanded term
       - Add an initialised flag
       - Restructure design matrix info
       - Make instead of polynomial then an expansions which just takes a set of operators
@@ -41,6 +40,7 @@ Use @view when creating the design matrices and level assignment matrices!
         - Which creates default priors or extrapolates single priors to full structure
         - Which checks that the inputs are all properly structured and matching
         - Which allows for using symbols to define the levels assignments (these are then transformed into integers)
+  - Make constructor function for RegressionPrior
   - Make custom summary functionalities (FlexiChains & MCMCChains)
   - Make custom plotting functions (FlexiChains & MCMCChains)
 - Fixes
@@ -48,40 +48,29 @@ Use @view when creating the design matrices and level assignment matrices!
   - Set full, concrete type requirements everywhere possible
   - Ensure that DualNumbers can be used throughout
   - Make getter functions for random effect hyperparameters
-  - Organise repository
-  - Make RegressionPrior modular, so that differnet components can be sample one at a time
-- Functionality
-  - unit tests
-  - documentation
+  - Make RegressionPrior modular, so that differnet components can be sampled one at a time
 - Usage
   - Fit the example Turing model with FlexiChains
   - Make example with Horseshoe priors.
   - Make example with Spike-and-slab priors.
   - Make example with a latent mixture model.
-  - Make example with multi-step Turing model
-  - Make example with categorical predictors
+  - Make example with multi-step Turing model.
 - Near future features
   - Make preconstructed spike-and-slab prior distribtution 
   - Make preconstructed horseshoe prior distribution 
   - Make preconstructed Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
   - Make constructor for combining multivariate distributions so that they sample vectors
-  - Add labels for categorical predictors
   - Make example with splines / polynomial terms
   - Make example with completely custom functions
   - Create standard spline expansion
-  - Create example using polynomial expansion
-  - Create example with cusotm expansion
-  - Create example with non-multiplication interactions
-  - Consider nice option for when data is shared or not shared across regressions
 - Extra
   - Make Turing submodel alternative to rand and logpdf (and benchmark)
 - Long-future and difficult features
   - Structured random effects across levels (e.g., gaussian process, AR1, etc.)
-  - Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is inside the Turing model)   - 3. Allow for estimating group memberships of random effect levels inside the Turing model
+  - Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is created inside the Turing model)   
+  - Allow for estimating group memberships of random effect levels inside the Turing model
 - Not planned features
   - "Category-specific random effects", where there can be random effects for only some levels of a categorical predictor (e.g., Treatment_High)
 - Decisions to make
   - What should be the value in matrices with un-generated values? 0, undef or missing?   
   - What do we do with missing values in the predictors? Set them to 0, drop them, or return an error? How about NaN?
-  - Should we allow having random effects for only a single level in a categorical predictor (say, only for Treatment_High, but not Treatment_Medium)
-  - Should fixed effects and random effect sds be stored as flat vectors or as structured vectors internally?
