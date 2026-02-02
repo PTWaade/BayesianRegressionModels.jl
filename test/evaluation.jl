@@ -6,8 +6,8 @@ include(joinpath("..", "src", "BayesianRegressionModels.jl"))
 ### INPUT FROM FORMULA ###
 ##########################
 
-# @formula Performance ~ 1 + Age * Treatment + Age_squared + (1 + Treatment | Subject) + (1 + Age | Experimenter), data = df1
-    # @expansion PolynomialExpansion() Age [Age, Age_squared]       <- expand the Age variable into Age and Age_squared using polynomial expansion (only for this regression)
+# @formula Performance ~ 1 + Age_first * Treatment + Age_second + (1 + Treatment | Subject) + (1 + Age_first | Experimenter), data = df1
+    # @expansion PolynomialExpansion() Age [Age_first, Age_second]       <- expand the Age variable into Age_first and Age_second using polynomial expansion (only for this regression)
 
 # @formula Accuracy ~ 1 + Age * BMI + 
 #                     @interaction Age : BMI MaxOperator() label= :max_age_BMI +         <- Add a custom interaction operator (here one that selects the maximum), and give it a custom label
@@ -17,6 +17,10 @@ include(joinpath("..", "src", "BayesianRegressionModels.jl"))
 # @block Subject Block1 Performance = [Treatment] Accuracy = [Age:BMI]
 # @block Subject Block2 Accuracy = [Age, BMI]
 
+#NOTES:
+#- If an expansion is not specified for a given variable, it just uses the IdentityExpansion(), unless it is a categoricla variable, in which case it uses DummyCodeExpansion()
+#- If an expansion is specified, but the original variable is used in the formula, then all expanded terms are included (e.g., if Age is used in the first regressions, it will include both Age_first and Age_second - the same for categorical variables)
+#- Expansions can be added for a specific regression, or globally for all regressions (not shown here)
 
 ########################
 ### 1 SPECIFY LABELS ###
@@ -49,7 +53,7 @@ basis_term_labels = DimArray([
 
     #Regression 1: Performance
     BasisTermDim([
-        :Intercept, :Age, :Age_squared, :Treatment_Medium, :Treatment_High
+        :Intercept, :Age_first, :Age_second, :Treatment_Medium, :Treatment_High
     ]),
 
     #Regression 2: Accuracy
@@ -65,7 +69,7 @@ fixed_effect_term_labels = DimArray([
     
     # Regression 1: Performance
     FixedEffectTermDim([
-        :Intercept, :Age, :Age_squared, :Treatment_Medium, :Treatment_High, :Age_x_Treatment_Medium, :Age_x_Treatment_High
+        :Intercept, :Age_first, :Age_second, :Treatment_Medium, :Treatment_High, :Age_x_Treatment_Medium, :Age_x_Treatment_High
     ]),
     
     # Regression 2: Accuracy
@@ -89,7 +93,7 @@ random_effect_term_labels = DimArray([
         #Factor 1: Subject
         RandomEffectTermDim([:Intercept, :Treatment_Medium, :Treatment_High]),
         #Factor 2: Experimenter
-        RandomEffectTermDim([:Intercept, :Age])
+        RandomEffectTermDim([:Intercept, :Age_first])
 
     ], random_effect_factor_labels),
     
@@ -179,7 +183,7 @@ block_assignments = DimArray([
         # Factor 1: Subject. Intercept is Residual, Treatment_Medium and Treatment_High are Block1
         DimArray([:ResidualBlock, :Block1, :Block1], random_effect_term_labels[At(:Performance)][At(:Subject)]),
         
-        # Factor 2: Experimenter. Both Intercept and Age is in a single block
+        # Factor 2: Experimenter. Both Intercept and Age_first is in a single block
         DimArray([:SingleBlock, :SingleBlock], random_effect_term_labels[At(:Performance)][At(:Experimenter)])
 
     ], random_effect_factor_labels),
@@ -225,7 +229,7 @@ specifications = RegressionSpecifications(group_assignments, block_assignments, 
 ## 1. Fixed effect priors ##
 fixed_effect_priors = DimArray([
 
-    # Regression 1: Performance (7 terms: Intercept, Age, Age_squared, 2 Treatment levels, 2 Age:Treatment interactions)
+    # Regression 1: Performance (7 terms: Intercept, Age_first, Age_second, 2 Treatment levels, 2 Age_first:Treatment interactions)
     DimArray(
         fill(Normal(0, 1), 7), 
         fixed_effect_term_labels[At(:Performance)]),
@@ -259,7 +263,7 @@ random_effect_sd_priors = DimArray([
 
         ], random_effect_group_labels[At(:Subject)]),
 
-        # Factor 2: Experimenter (2 terms: Intercept, Age)
+        # Factor 2: Experimenter (2 terms: Intercept, Age_first)
         DimArray([
             
             #Group 1: SingleGroup
@@ -345,7 +349,7 @@ random_effect_correlation_LKJcholesky_priors = DimArray([
         # Group 1: SingleGroup
         DimArray([
 
-            # Block 1: SingleBlock (2 terms: Intercept and Age)
+            # Block 1: SingleBlock (2 terms: Intercept and Age_first)
             LKJCholesky(2, 1.0)
 
         ], random_effect_block_labels[At(:Experimenter)])
@@ -391,10 +395,10 @@ basis_matrix_r1 = DimArray(hcat(
     # Variable 1: Intercept
     ones(n_observations_r1), 
 
-    # Variable 2: Age
+    # Variable 2: Age_first
     age_r1,    
 
-    # Variable 3: Age_squared
+    # Variable 3: Age_second
     age_r1.^2,    
 
     # Variable 4: Treatment_Medium  
@@ -412,11 +416,11 @@ fixed_effects_design_matrix_r1 = DimArray(hcat(
     #The basis terms are all there
     parent(basis_matrix_r1), 
 
-    #The Age:Treatment_Medium interaction
-    basis_matrix_r1[:, At(:Age)] .* basis_matrix_r1[:, At(:Treatment_Medium)], 
+    #The Age_first:Treatment_Medium interaction
+    basis_matrix_r1[:, At(:Age_first)] .* basis_matrix_r1[:, At(:Treatment_Medium)], 
     
-    #The Age:Treatment_High interaction
-    basis_matrix_r1[:, At(:Age)] .* basis_matrix_r1[:, At(:Treatment_High)]
+    #The Age_first:Treatment_High interaction
+    basis_matrix_r1[:, At(:Age_first)] .* basis_matrix_r1[:, At(:Treatment_High)]
     
 ), (observation_labels[At(:Performance)], fixed_effect_term_labels[At(:Performance)]))
 
@@ -428,7 +432,7 @@ random_effect_design_matrices_r1 = DimArray([
     basis_matrix_r1[:, At([:Intercept, :Treatment_Medium, :Treatment_High])],
     
     # Factor 2: Experimenter (2 terms)
-    basis_matrix_r1[:, At([:Intercept, :Age])]
+    basis_matrix_r1[:, At([:Intercept, :Age_first])]
 
 ], random_effect_factor_labels)
 
@@ -448,8 +452,8 @@ random_effect_level_assignments_r1 = DimArray(hcat(
 ## 6. Create interaction recipes ##
 fixed_effects_interaction_recipes_r1 = [
         nothing, nothing, nothing, nothing, nothing, # Terms 1-5 are basis terms
-        InteractionRecipe([2, 4], MultiplicationOperator()),       # Term 6: Age (2) * Treatment_Medium (4)
-        InteractionRecipe([2, 5], MultiplicationOperator())        # Term 7: Age (2) * Treatment_High (5)
+        InteractionRecipe([2, 4], MultiplicationOperator()),       # Term 6: Age_first (2) * Treatment_Medium (4)
+        InteractionRecipe([2, 5], MultiplicationOperator())        # Term 7: Age_first (2) * Treatment_High (5)
     ]
 
 random_effects_interaction_recipes_r1 = [
