@@ -4,8 +4,8 @@ Use @view when creating the design matrices and level assignment matrices!
 #TODO:
  - Prioritised changes
    - MISC
-      - Restructure design matrix info
       - Add an initialised flag
+      - Restructure design matrix info
       - Make instead of polynomial then an expansions which just takes a set of operators
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - 2. Optimise RegressionPrior

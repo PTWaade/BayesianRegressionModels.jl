@@ -1,71 +1,15 @@
-#################################
-### BASIS EXPANSION FUNCTIONS ###
-#################################
+#############
+### TYPES ###
+#############
 
-## 1.3 Abstract type and general function custom expansion functions ##
+## 1. Types for keeping information about terms ##
+## 1.1 Abstract type and general function custom expansion functions ##
 abstract type AbstractBasisExpansion end
 function expand_into_basis_matrix!(value, basis_matrix, indices, expansion_type::AbstractBasisExpansion)
     error("No expansion function has been implemented for the type $(typeof(expansion_type))")
 end
 
-## 1.1 Default identity expansion type and function ##
-struct IdentityExpansion <: AbstractBasisExpansion end
-function expand_into_basis_matrix!(
-    values::Tvalues, 
-    basis_matrix::Tbasis_matrix, 
-    target_indices::Vector{Int},
-    expansion_type::IdentityExpansion
-    ) where {Tbasis_matrix<:AbstractMatrix, Tvalues<:AbstractVector}
-    
-    #Just insert the values in the basis matrix column
-    basis_matrix[:, target_indices] .= values
-    
-end
-
-
-## 1.2 Default dummy code expansions for categorical variables ##
-struct DummyCodeExpansion <: AbstractBasisExpansion end
-function expand_into_basis_matrix!(
-    values::Tvalues, 
-    basis_matrix::Tbasis_matrix, 
-    target_indices::Vector{Int}, 
-    expansion_type::DummyCodeExpansion
-)where {Tbasis_matrix<:AbstractMatrix, Tvalues<:AbstractVector{Int}}
-    
-    #For each level in the categorical variable
-    for (level_idx, col_idx) in enumerate(target_indices)
-
-        #Set a 1 when the level is one above the value (since there is no column for the lowest level)
-        basis_matrix[:, col_idx] .= (values .== (level_idx + 1))
-        
-    end
-end
-
-
-## 1.3 Polynomial expansion ##
-struct PolynomialExpansion <: AbstractBasisExpansion end
-function expand_into_basis_matrix!(
-    values::Tvalues, 
-    basis_matrix::Tbasis_matrix, 
-    target_indices::Vector{Int}, 
-    expansion_type::PolynomialExpansion
-    ) where {Tbasis_matrix<:AbstractMatrix, Tvalues<:AbstractVector{<:Number}}
-    
-    #For each term in the polynomial
-    for (polynomial_power, col_idx) in enumerate(target_indices)
-        
-        #Calculate and insert the transformed value
-        basis_matrix[:, col_idx] .= values .^ polynomial_power
-
-    end
-end
-
-
-######################################
-### INTERACTION OPERATOR FUNCTIONS ###
-######################################
-
-## 1. Abstract type for dispatching operators ##
+## 1.2 Abstract type for dispatching operators ##
 abstract type AbstractInteractionOperator end
 function update_interaction!(
     target_column::T_target, 
@@ -76,55 +20,7 @@ function update_interaction!(
     error("update_interaction! has not been extended for the operator type: $(typeof(operator_type))")
 end
 
-
-## 2. The default multiplication operator ##
-struct MultiplicationOperator <: AbstractInteractionOperator end
-function update_interaction!(
-    target_column::T_target, 
-    basis_matrix::T_basis, 
-    component_indices::Vector{Int}, 
-    operator_type::MultiplicationOperator
-) where {T_target<:AbstractVector{<:Real}, T_basis<:AbstractMatrix{<:Real}}
-    
-    # Initialize target with the first component
-    target_column .= view(basis_matrix, :, component_indices[1])
-    
-    # For each remaining component
-    for i in 2:length(component_indices)
-        # Multiply it onto the target
-        target_column .*= view(basis_matrix, :, component_indices[i])
-    end
-
-end
-
-
-## 3. Addition operator ##
-struct AdditionOperator <: AbstractInteractionOperator end
-function update_interaction!(
-    target_column::T_target, 
-    basis_matrix::T_basis, 
-    component_indices::Vector{Int}, 
-    operator_type::AdditionOperator
-) where {T_target<:AbstractVector{<:Real}, T_basis<:AbstractMatrix{<:Real}}
-
-    # Initialize target with the first component
-    target_column .= view(basis_matrix, :, component_indices[1])
-    
-    # For each remaining component
-    for i in 2:length(component_indices)
-        # Add it to the target
-        target_column .+= view(basis_matrix, :, component_indices[i])
-    end
-
-end
-
-
-#############
-### TYPES ###
-#############
-
-## 1. Types for keeping information about terms ##
-## 1.1 Type for storing which interaction terms depend on ##
+## 1.3 Type for storing which interaction terms depend on ##
 struct DependentInteractionIndices
     #Vector of columns in the fixed effects design matrix
     fixed_effects::Vector{Int}
@@ -133,7 +29,7 @@ struct DependentInteractionIndices
     random_effects::Vector{Tuple{Int, Int}}
 end
 
-## 1.2 Type that contains BitSets for makring which interactions to recompute ##
+## 1.4 Type that contains BitSets for makring which interactions to recompute ##
 struct InteractionUpdateMarkers
     #BitSet of fixed effect design matrix column indices
     fixed_effects::BitSet
@@ -143,7 +39,7 @@ struct InteractionUpdateMarkers
 end
 
 
-## 1.7 Type for carrying information about a term ##
+## 1.5 Type for carrying information about a term ##
 Base.@kwdef struct TermInfo{T<:AbstractBasisExpansion}
     
     #Type governing how the basis values are expanded
@@ -166,8 +62,7 @@ Base.@kwdef struct TermInfo{T<:AbstractBasisExpansion}
 end
 
 
-## 2. Types for keeping information about interactions ##
-# 2.1 Type contianing the recipe for a specific interaction #
+# 1.6 Type contianing the recipe for a specific interaction #
 struct InteractionRecipe{T<:AbstractInteractionOperator}
     #Columns in the basis matrix that contain the components needed for the interaction
     basis_matrix_indices::Vector{Int}
@@ -177,7 +72,7 @@ struct InteractionRecipe{T<:AbstractInteractionOperator}
 end
 
 
-# 3. Struct for keeping predictors and all necessary information #
+# 1.7 Struct for keeping predictors and all necessary information #
 struct RegressionPredictors{
     Tbasis_matrices<:AbstractMatrix{<:Real},
     Tfixedeffects<:AbstractMatrix{<:Real},

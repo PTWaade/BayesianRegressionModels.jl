@@ -2,7 +2,7 @@
 using Distributions
 using LinearAlgebra
 using Random
-using PDMats #This gives efficient computation for psitive definite matrices, used for the LKJCholesky stuff
+using PDMats #This gives efficient computation for positive definite matrices, used for the LKJCholesky stuff
 using DimensionalData #This allows for named dimensions in arrays
 using DimensionalData: @dim
 
@@ -21,3 +21,7 @@ include("3_linear_combination.jl")
 include("4_TuringExt.jl")
 
 include("5_formula.jl")
+
+include("6_basis_expansions.jl")
+
+include("7_interaction_operators.jl")
