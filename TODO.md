@@ -8,6 +8,7 @@ Use @view when creating the design matrices and level assignment matrices!
       - Restructure design matrix info
       - Make instead of polynomial then an expansions which just takes a set of operators
       - Make the initialisation of RegressionPredictors use update_variable one by one
+      - Should random effect betas be stored with regression before factor ?
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - 2. Optimise RegressionPrior
         - Minimise use of DimensionalData where not needed
@@ -15,19 +16,17 @@ Use @view when creating the design matrices and level assignment matrices!
         - Add likelihood to simple_regression
         - Add multiple operations to multistep_regression 
 - Features to consider
-  - Should random effect betas be stored with regression before factor ?
-  - How about orinal models?
+  - Ordinal predictors, ordinal outcomes
   - SparseArrays? LazyArrays?
-  - QR decomposition ? Orthogonal polar decomposition?
-  - Change fixed/random to population/group ?
+  - QR decomposition? Orthogonal polar decomposition?
+  - Change naming: fixed/random to population/group ?
   - Multi-membership (i.e., an observation can be two random effect levels, and the random effect for that observationis the average or weighted sum of the two levels it belongs to)
-  - Monotonic effects
-  - Measurement error
-  - Imputing missing predictors
-  - Meta-analysis
-  - Weighted regression (different weights on different observations)
-  - Make example with sequential sampling model as family
-  - Mixture models
+  - Monotonic effects (only for cateogrical/ordinal outcomes I think)
+  - Measurement error (i.e. put a Turing submodel linking the latent predictor to some observed data)
+  - Imputing missing predictors (this needs a model that can generate missing predictor data)
+  - Meta-analysis (This needs to able to take standard errors and stuff and go from there)
+  - Weighted regression (different weights on different observations, I think by multiplying the logprobs actually)
+  - Mixture models (i.e., where multiple distributions are combined in the likelihood, I think)
   - Re-parameterise the intercept:
     (brms): By default, the population-level intercept (if incorporated) is estimated separately and not as part of population-level parameter vector b As a result, priors on the intercept also have to be specified separately. Furthermore, to increase sampling efficiency, the population-level design matrix X is centered around its column means X_means if the intercept is incorporated. This leads to a temporary bias in the intercept equal to <X_means, b>, where <,> is the scalar product. The bias is corrected after fitting the model, but be aware that you are effectively defining a prior on the intercept of the centered design matrix not on the real intercept. You can turn off this special handling of the intercept by setting argument center to FALSE. For more details on setting priors on population-level intercepts, see set_prior.This behavior can be avoided by using the reserved (and internally generated) variable Intercept. Instead of y ~ x, you may write y ~ 0 + Intercept + x. This way, priors can be defined on the real intercept, directly. In addition, the intercept is just treated as an ordinary population-level effect and thus priors defined on b will also apply to it. Note that this parameterization may be less efficient than the default parameterization discussed above.
   - Allow for sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
@@ -62,6 +61,7 @@ Use @view when creating the design matrices and level assignment matrices!
   - Make constructor for combining multivariate distributions so that they sample vectors
   - Make example with splines / polynomial terms
   - Make example with completely custom functions
+  - Make example with sequential sampling model as likelihood
   - Create standard spline expansion
 - Extra
   - Make Turing submodel alternative to rand and logpdf (and benchmark)
