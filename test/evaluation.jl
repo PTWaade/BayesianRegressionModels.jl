@@ -7,7 +7,7 @@ include(joinpath("..", "src", "BayesianRegressionModels.jl"))
 ##########################
 
 # @formula Performance ~ 1 + Age_first * Treatment + Age_second + (1 + Treatment | Subject) + (1 + Age_first | Experimenter), data = df1
-    # @expansion PolynomialExpansion() Age [Age_first, Age_second]       <- expand the Age variable into Age_first and Age_second using polynomial expansion (only for this regression)
+    # @expansion PolynomialExpansion(2) Age [Age_first, Age_second]       <- expand the Age variable into Age_first and Age_second using polynomial expansion (only for this regression)
 
 # @formula Accuracy ~ 1 + Age * BMI + 
 #                     @interaction Age : BMI MaxOperator() label= :max_age_BMI +         <- Add a custom interaction operator (here one that selects the maximum), and give it a custom label
@@ -464,7 +464,6 @@ random_effects_interaction_recipes_r1 = [
         Union{Nothing, InteractionRecipe{MultiplicationOperator}}[nothing for _ in 1:2]       
     ]
 
-
 ## 7. Create info for each term ##
 terms_info_r1 = (
 
@@ -477,7 +476,7 @@ terms_info_r1 = (
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])),
     
     Age = TermInfo(
-        basis_expansion_type = PolynomialExpansion(),
+        basis_expansion_type = PolynomialExpansion(2),
         basis_matrix_indices = [2, 3], 
         fixed_effects_indices = [2, 3],
         random_effects_indices = [(2, [2, 0])],

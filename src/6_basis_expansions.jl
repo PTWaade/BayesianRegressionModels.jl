@@ -34,20 +34,31 @@ function expand_into_basis_matrix!(
     end
 end
 
-## 3 Polynomial expansion ##
-struct PolynomialExpansion <: AbstractBasisExpansion end
+
+
+## 3 Functional Basis Expansion ##
+# Allows for arbitrary transformations like [x, x^2, log(x)]
+struct FunctionalExpansion{T<:Tuple{Vararg{Function}}} <: AbstractBasisExpansion 
+    functions::T
+end
 function expand_into_basis_matrix!(
     values::Tvalues, 
     basis_matrix::Tbasis_matrix, 
     target_indices::Vector{Int}, 
-    expansion_type::PolynomialExpansion
-    ) where {Tbasis_matrix<:AbstractMatrix, Tvalues<:AbstractVector{<:Number}}
+    expansion_type::FunctionalExpansion
+) where {Tbasis_matrix<:AbstractMatrix, Tvalues<:AbstractVector{<:Number}}
     
-    #For each term in the polynomial
-    for (polynomial_power, col_idx) in enumerate(target_indices)
+    # Iterate through the list of functions provided in the expansion type
+    for (function_idx, col_idx) in enumerate(target_indices)
         
-        #Calculate and insert the transformed value
-        basis_matrix[:, col_idx] .= values .^ polynomial_power
+        # Apply the specific function to the raw values and update the basis column
+        basis_matrix[:, col_idx] .= expansion_type.functions[function_idx].(values)
 
     end
+end
+
+
+## 4 Polynomial expansion as a special case ##
+function PolynomialExpansion(degree::Int)
+    return FunctionalExpansion(Tuple(x -> x^p for p in 1:degree))
 end

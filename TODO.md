@@ -6,7 +6,6 @@ Use @view when creating the design matrices and level assignment matrices!
    - MISC
       - Add an initialised flag
       - Restructure design matrix info
-      - Make instead of polynomial then an expansions which just takes a set of operators
       - Make the initialisation of RegressionPredictors use update_variable one by one
       - Should random effect betas be stored with regression before factor ?
    - 1. Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
