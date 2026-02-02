@@ -6,8 +6,13 @@ include(joinpath("..", "src", "BayesianRegressionModels.jl"))
 ### INPUT FROM FORMULA ###
 ##########################
 
-# @formula Performance ~ 1 + Age * Treatment (1 + Treatment | Subject) + (1 + Age | Experimenter), data = df1
-# @formula Accuracy ~ 1 + Age * BMI + (1 + Age * BMI | Subject), data = df2
+# @formula Performance ~ 1 + Age * Treatment + Age_squared + (1 + Treatment | Subject) + (1 + Age | Experimenter), data = df1
+    # @expansion PolynomialExpansion() Age [Age, Age_squared]       <- expand the Age variable into Age and Age_squared using polynomial expansion (only for this regression)
+
+# @formula Accuracy ~ 1 + Age * BMI + 
+#                     @interaction Age : BMI MaxOperator() label= :max_age_BMI +         <- Add a custom interaction operator (here one that selects the maximum), and give it a custom label
+#                     (1 + Age * BMI | Subject), data = df2
+
 # @group Subject by = ClinicalGroup
 # @block Subject Block1 Performance = [Treatment] Accuracy = [Age:BMI]
 # @block Subject Block2 Accuracy = [Age, BMI]
@@ -44,7 +49,7 @@ basis_term_labels = DimArray([
 
     #Regression 1: Performance
     BasisTermDim([
-        :Intercept, :Age, :Treatment_Medium, :Treatment_High
+        :Intercept, :Age, :Age_squared, :Treatment_Medium, :Treatment_High
     ]),
 
     #Regression 2: Accuracy
@@ -60,12 +65,12 @@ fixed_effect_term_labels = DimArray([
     
     # Regression 1: Performance
     FixedEffectTermDim([
-        :Intercept, :Age, :Treatment_Medium, :Treatment_High, :Age_x_Treatment_Medium, :Age_x_Treatment_High
+        :Intercept, :Age, :Age_squared, :Treatment_Medium, :Treatment_High, :Age_x_Treatment_Medium, :Age_x_Treatment_High
     ]),
     
     # Regression 2: Accuracy
     FixedEffectTermDim([
-        :Intercept, :Age, :BMI, :Age_x_BMI
+        :Intercept, :Age, :BMI, :Age_x_BMI, :max_age_BMI,
     ])
 
 ], regression_labels)
@@ -220,14 +225,14 @@ specifications = RegressionSpecifications(group_assignments, block_assignments, 
 ## 1. Fixed effect priors ##
 fixed_effect_priors = DimArray([
 
-    # Regression 1: Performance (6 terms: Intercept, Age, 2 Treatment, 2 Interactions)
+    # Regression 1: Performance (7 terms: Intercept, Age, Age_squared, 2 Treatment levels, 2 Age:Treatment interactions)
     DimArray(
-        fill(Normal(0, 1), 6), 
+        fill(Normal(0, 1), 7), 
         fixed_effect_term_labels[At(:Performance)]),
     
-    # Regression 2: Accuracy (4 terms: Intercept, Age, BMI, Interaction)
+    # Regression 2: Accuracy (5 terms: Intercept, Age, BMI, Age:BMI product, Max(Age, BMI))
     DimArray(
-        fill(Normal(0, 1), 4),
+        fill(Normal(0, 1), 5),
         fixed_effect_term_labels[At(:Accuracy)])
 
 ], regression_labels)
@@ -378,6 +383,7 @@ n_observations_r1 = length(labels.observations[At(:Performance)])
 ## 2. Create basis matrix ##
 #Generate treatment cateogrical data (3 levels)
 treatment_r1 = rand(1:3, n_observations_r1)
+age_r1 = randn(n_observations_r1)
 
 #Create basis matrix
 basis_matrix_r1 = DimArray(hcat(
@@ -386,12 +392,15 @@ basis_matrix_r1 = DimArray(hcat(
     ones(n_observations_r1), 
 
     # Variable 2: Age
-    randn(n_observations_r1),    
+    age_r1,    
 
-    # Variable 3: Treatment_Medium  
+    # Variable 3: Age_squared
+    age_r1.^2,    
+
+    # Variable 4: Treatment_Medium  
     treatment_r1 .== 2,  
 
-    # Variable 4: Treatment_High
+    # Variable 5: Treatment_High
     treatment_r1 .== 3   
 
 ), (observation_labels[At(:Performance)], basis_term_labels[At(:Performance)]))
@@ -438,9 +447,9 @@ random_effect_level_assignments_r1 = DimArray(hcat(
 
 ## 6. Create interaction recipes ##
 fixed_effects_interaction_recipes_r1 = [
-        nothing, nothing, nothing, nothing, # Terms 1-4 are basis terms
-        InteractionRecipe([2, 3], MultiplicationOperator()),       # Term 5: Age (2) * Treatment_Medium (3)
-        InteractionRecipe([2, 4], MultiplicationOperator())        # Term 6: Age (2) * Treatment_High (4)
+        nothing, nothing, nothing, nothing, nothing, # Terms 1-5 are basis terms
+        InteractionRecipe([2, 4], MultiplicationOperator()),       # Term 6: Age (2) * Treatment_Medium (4)
+        InteractionRecipe([2, 5], MultiplicationOperator())        # Term 7: Age (2) * Treatment_High (5)
     ]
 
 random_effects_interaction_recipes_r1 = [
@@ -464,21 +473,21 @@ terms_info_r1 = (
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])),
     
     Age = TermInfo(
-        basis_expansion_type = IdentityExpansion(),
-        basis_matrix_indices = [2], 
-        fixed_effects_indices = [2],
-        random_effects_indices = [(2, [2])],
+        basis_expansion_type = PolynomialExpansion(),
+        basis_matrix_indices = [2, 3], 
+        fixed_effects_indices = [2, 3],
+        random_effects_indices = [(2, [2, 0])],
         level_assignments_idx = 0,
-        dependent_interaction_indices = DependentInteractionIndices([5, 6], Tuple{Int, Int}[]) 
+        dependent_interaction_indices = DependentInteractionIndices([6, 7], Tuple{Int, Int}[]) 
     ),
     
     Treatment = TermInfo(
         basis_expansion_type = DummyCodeExpansion(),
-        basis_matrix_indices = [3, 4], 
-        fixed_effects_indices = [3, 4],
+        basis_matrix_indices = [4, 5], 
+        fixed_effects_indices = [4, 5],
         random_effects_indices = [(1, [2, 3])],
         level_assignments_idx = 0, 
-        dependent_interaction_indices = DependentInteractionIndices([5, 6], Tuple{Int, Int}[])
+        dependent_interaction_indices = DependentInteractionIndices([6, 7], Tuple{Int, Int}[])
     ),
 
     # Subject info
@@ -543,7 +552,10 @@ fixed_effects_design_matrix_r2 = DimArray(hcat(
     parent(basis_matrix_r2), 
 
     # Term 4: Age:BMI interaction
-    basis_matrix_r2[:, At(:Age)] .* basis_matrix_r2[:, At(:BMI)]
+    basis_matrix_r2[:, At(:Age)] .* basis_matrix_r2[:, At(:BMI)],
+
+    # Term 5: max(Age, BMI)
+    max.(basis_matrix_r2[:, At(:Age)], basis_matrix_r2[:, At(:BMI)])
     
 ), (observation_labels[At(:Accuracy)], fixed_effect_term_labels[At(:Accuracy)]))
 
@@ -571,14 +583,19 @@ random_effect_level_assignments_r2 = DimArray(hcat(
 
 
 ## 6. Create interaction recipes ##
-fixed_effects_interaction_recipes_r2 = [nothing, nothing, nothing, InteractionRecipe([2, 3], MultiplicationOperator())]  # 4: Age (2) * BMI (3)
+fixed_effects_interaction_recipes_r2 = [nothing, nothing, nothing, 
+    InteractionRecipe([2, 3], MultiplicationOperator()), # 4: Age (2) * BMI (3)
+    InteractionRecipe([2, 3], MaxOperator())             # 5: max(Age (2), BMI (3))
+]  
 
 random_effects_interaction_recipes_r2 = [
     # Factor 1: Subject (4 terms, 3 main effects and 1 interaction)
-    [nothing, nothing, nothing, InteractionRecipe([2, 3], MultiplicationOperator())], # 4: Age (2) * BMI (3)
+    [nothing, nothing, nothing, 
+    InteractionRecipe([2, 3], MultiplicationOperator()), # 4: Age (2) * BMI (3)
+    ], 
 
     # Factor 2: Experimenter (No terms)
-    Vector{Union{Nothing, InteractionRecipe}}()
+    Vector{Union{Nothing, InteractionRecipe{MultiplicationOperator}}}()
 ]
 
 ## 7. Create info for each term ##
@@ -588,7 +605,7 @@ terms_info_r2 = (
         basis_expansion_type = IdentityExpansion(),
         basis_matrix_indices = [1], 
         fixed_effects_indices = [1],
-        random_effects_indices = [(1, [1]), (2, [1])],
+        random_effects_indices = [(1, [1])],
         level_assignments_idx = 0,
         dependent_interaction_indices = DependentInteractionIndices(Int[], Tuple{Int, Int}[])
     ),
@@ -600,7 +617,7 @@ terms_info_r2 = (
         random_effects_indices = [(1, [2])],
         level_assignments_idx = 0,
         # Age is part of the interaction in the fixed effects design matrix (col 4) and in the Subject random effects design matrix (Factor 1, col 4)
-        dependent_interaction_indices = DependentInteractionIndices([4], [(1, 4)]) 
+        dependent_interaction_indices = DependentInteractionIndices([4, 5], [(1, 4)]) 
     ),
     
     BMI = TermInfo(
@@ -610,7 +627,7 @@ terms_info_r2 = (
         random_effects_indices = [(1, [3])],
         level_assignments_idx = 0,
         # BMI is part of the interaction in Fixed (col 4) and Subject Random (Factor 1, col 4)
-        dependent_interaction_indices = DependentInteractionIndices([4], [(1, 4)])
+        dependent_interaction_indices = DependentInteractionIndices([4,5], [(1, 4)])
     ),
 
     Subject = TermInfo(

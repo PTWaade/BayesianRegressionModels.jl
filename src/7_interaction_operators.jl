@@ -41,3 +41,21 @@ function update_interaction!(
     end
 
 end
+
+## 3. Max operator ##
+struct MaxOperator <: AbstractInteractionOperator end
+function update_interaction!(
+    target_column::T_target, 
+    basis_matrix::T_basis, 
+    component_indices::Vector{Int}, 
+    operator_type::MaxOperator
+) where {T_target <: AbstractVector, T_basis <: AbstractMatrix}
+
+    # Initialize with the first column
+    target_column .= view(basis_matrix, :, component_indices[1])
+
+    # Iteratively apply max for any additional columns (e.g., if you had 3-way interactions)
+    for i in 2:length(component_indices)
+        target_column .= max.(target_column, view(basis_matrix, :, component_indices[i]))
+    end
+end

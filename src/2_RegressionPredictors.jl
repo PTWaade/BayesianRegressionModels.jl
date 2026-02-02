@@ -124,17 +124,29 @@ function update_matrices!(
     expand_into_basis_matrix!(values, predictors.basis_matrix, info.basis_matrix_indices, info.basis_expansion_type)
 
     # 1.2 Update fixed effects design matrix
-    #If there are fixed effect indices to update
-    if !isempty(info.fixed_effects_indices)
-        #Copy in values from the basis matrix
-        view(predictors.fixed_effect_design_matrix, :, info.fixed_effects_indices) .= view(parent(predictors.basis_matrix), :, info.basis_matrix_indices)
+    #For each pair of basis and design matrix indices
+    for (basis_matrix_idx, design_matrix_idx) in zip(info.basis_matrix_indices, info.fixed_effects_indices)
+        #If the design matrix index is used
+        if design_matrix_idx > 0
+            #Update it
+            view(predictors.fixed_effect_design_matrix, :, design_matrix_idx) .= view(predictors.basis_matrix, :, basis_matrix_idx)
+        end
     end
 
     # 1.3 Update each of the random effect design matrices
-    #For indices in each factor f
+    #For each factor which has indices to update
     for (f, design_matrix_indices) in info.random_effects_indices
-        #Copy in values from the basis matrix
-        view(predictors.random_effect_design_matrices[f], :, design_matrix_indices) .= view(predictors.basis_matrix, :, info.basis_matrix_indices)
+        #Extract the relevant random effect design matrix
+        random_effect_design_matrix_f = parent(predictors.random_effect_design_matrices[f])
+        
+        #For each pair of basis and design matrix indices
+        for (basis_matrix_idx, design_matrix_idx) in zip(info.basis_matrix_indices, design_matrix_indices)
+            #If the design matrix index is used
+            if design_matrix_idx > 0
+                #Update it
+                view(random_effect_design_matrix_f, :, design_matrix_idx) .= view(parent(predictors.basis_matrix), :, basis_matrix_idx)
+            end
+        end
     end
 
     # 1.4 If there is a level assignments index
@@ -142,7 +154,6 @@ function update_matrices!(
         # Update the level assignments matrix
         predictors.random_effect_level_assignments[:, info.level_assignments_idx] .= values
     end
-
 end
 
 
