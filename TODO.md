@@ -7,10 +7,7 @@ Use @view when creating the design matrices and level assignment matrices!
    - Optimise RegressionPrior
       - Minimise use of DimensionalData where not needed
    - Finish Turing models
-      - Add likelihood to simple_regression
       - Add multiple operations to multistep_regression 
-  - Make constructor for RegressionPredictors
-      - Make the initialisation of RegressionPredictors use update_variable one by one
 - Features to consider
   - Ordinal predictors, ordinal outcomes
   - SparseArrays? LazyArrays?
@@ -35,32 +32,31 @@ Use @view when creating the design matrices and level assignment matrices!
         - Which creates default priors or extrapolates single priors to full structure
         - Which checks that the inputs are all properly structured and matching
         - Which allows for using symbols to define the levels assignments (these are then transformed into integers)
-  - Make constructor function for RegressionPrior
-  - Make custom summary functionalities (FlexiChains & MCMCChains)
-  - Make custom plotting functions (FlexiChains & MCMCChains)
+   - Make constructor for RegressionPredictors
+      - Which initialises the RegressionPredictors by using update_variables
+  - Make custom summary and plotting functionalities (FlexiChains & MCMCChains)
+  - Make Turing submodel alternative to rand and logpdf (and benchmark)
 - Fixes
   - Add comments with canonical mathematical notation   
   - Set full, concrete type requirements everywhere possible
   - Ensure that DualNumbers can be used throughout
   - Make getter functions for random effect hyperparameters
   - Make RegressionPrior modular, so that differnet components can be sampled one at a time
-- Usage
-  - Fit the example Turing model with FlexiChains
-  - Make example with Horseshoe priors.
-  - Make example with Spike-and-slab priors.
-  - Make example with a latent mixture model.
-  - Make example with multi-step Turing model.
+- Usage examples
+  - Make example with Horseshoe priors
+  - Make example with Spike-and-slab priors
+  - Make example with a latent mixture model
+  - Make example with multi-step Turing model
+  - Make example with splines / polynomial terms
+  - Make example with sequential sampling model as likelihood
+  - Make example with custom likelihoods, interaction operators and expansion functions
+  - Make example with multi-step model
 - Near future features
   - Make preconstructed spike-and-slab prior distribtution 
   - Make preconstructed horseshoe prior distribution 
   - Make preconstructed Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
   - Make constructor for combining multivariate distributions so that they sample vectors
-  - Make example with splines / polynomial terms
-  - Make example with completely custom functions
-  - Make example with sequential sampling model as likelihood
-  - Create standard spline expansion
-- Extra
-  - Make Turing submodel alternative to rand and logpdf (and benchmark)
+  - Create standard spline expansion (i.e., an extensions for the spline package)
 - Long-future and difficult features
   - Structured random effects across levels (e.g., gaussian process, AR1, etc.)
   - Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is created inside the Turing model)   
@@ -69,6 +65,6 @@ Use @view when creating the design matrices and level assignment matrices!
   - "Category-specific random effects", where there can be random effects for only some levels of a categorical predictor (e.g., Treatment_High)
 - Decisions to make
   - What should be the value in matrices with un-generated values? 0, undef or missing?   
-  - What do we do with missing values in the predictors? Set them to 0, drop them, or return an error? How about NaN?
+  - What do we do with missing values in the predictors? Set them to undef, 0, drop them, or return an error? How about NaN?
   - Should random effect betas be stored with regression before factor ? Could this allow for storing coefficients for each regressions separately?
   - Should we add an "initialised" flag to RegressionPredictors terms, s
