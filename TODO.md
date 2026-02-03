@@ -6,6 +6,7 @@ Use @view when creating the design matrices and level assignment matrices!
    - Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - Optimise RegressionPrior
       - Minimise use of DimensionalData where not needed
+    - Make example in evaluation use full multistep functionality
 - Features to consider
   - Ordinal predictors, ordinal outcomes
   - SparseArrays? LazyArrays?
