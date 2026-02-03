@@ -3,9 +3,6 @@ Use @view when creating the design matrices and level assignment matrices!
 
 #TODO:
  - Prioritised changes
-   - Finalise RegressionPredictors
-      - Add an initialised flag
-      - Restructure design matrix info
    - Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - Optimise RegressionPrior
       - Minimise use of DimensionalData where not needed
@@ -74,3 +71,4 @@ Use @view when creating the design matrices and level assignment matrices!
   - What should be the value in matrices with un-generated values? 0, undef or missing?   
   - What do we do with missing values in the predictors? Set them to 0, drop them, or return an error? How about NaN?
   - Should random effect betas be stored with regression before factor ? Could this allow for storing coefficients for each regressions separately?
+  - Should we add an "initialised" flag to RegressionPredictors terms, s

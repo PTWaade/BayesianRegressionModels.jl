@@ -456,13 +456,13 @@ fixed_effects_interaction_recipes_r1 = [
         InteractionRecipe([2, 5], MultiplicationOperator())        # Term 7: Age_first (2) * Treatment_High (5)
     ]
 
-random_effects_interaction_recipes_r1 = [
+random_effects_interaction_recipes_r1 = DimArray([
         # Factor 1: Subject (3 terms, no interactions)
         Union{Nothing, InteractionRecipe{MultiplicationOperator}}[nothing for _ in 1:3],                   
 
         # Factor 2: Experimenter (2 terms, no interactions)
         Union{Nothing, InteractionRecipe{MultiplicationOperator}}[nothing for _ in 1:2]       
-    ]
+    ], random_effect_factor_labels)
 
 ## 7. Create info for each term ##
 terms_info_r1 = (

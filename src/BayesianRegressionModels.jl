@@ -25,3 +25,5 @@ include("5_formula.jl")
 include("6_basis_expansions.jl")
 
 include("7_interaction_operators.jl")
+
+include("8_Likelihood_submodels.jl")

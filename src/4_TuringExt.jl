@@ -1,18 +1,32 @@
+#############
+### TYPES ###
+#############
+
+## Abstract type for likelihood information ##
+abstract type AbstractRegressionLikelihood end
+@model function regression_likelihood(
+    outcomes::Tdata,
+    predictions::Tpredictions,
+    likelihood_info::Tlikelihood,
+) where {Tdata<:AbstractVector,Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}},Tpredictions<:DimVector}
+
+    @error "No likelihood model has been implemented for the likelihood type: $Tlikelihood"
+
+end
 
 
-#####################
-### TURING MODELS ###
-#####################
 
-struct SimpleRegressionLikelihood end
+######################################
+### TOP-LEVEL TURING MODEL: SIMPLE ###
+######################################
 
-###### SIMPLE TURING MODEL ######
+### Simple Turing model with independent regressions ###
 @model function simple_regression(
-    predictors::Tpredictors, 
-    outcomes::Toutcomes, 
-    priors::Tprior, 
+    predictors::Tpredictors,
+    outcomes::Toutcomes,
+    priors::Tprior,
     likelihood::Tlikelihood
-    ) where {Tpredictors <: AbstractVector{<:RegressionPredictors}, Toutcomes<:AbstractArray, Tprior<:RegressionPrior, Tlikelihood}
+) where {Tpredictors<:AbstractVector{<:RegressionPredictors},Toutcomes<:NamedTuple,Tprior<:RegressionPrior,Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}}}
 
     # 1. Sample coefficients
     coefficients ~ priors
@@ -21,13 +35,16 @@ struct SimpleRegressionLikelihood end
     predictions = linear_combination(predictors, coefficients)
 
     # 3. Implement likelihood function
-    #outcomes ~ to_submodel(likelihood.model(predictions, outcomes, likelihood))
+    outcomes ~ to_submodel(prefix(likelihood.model(outcomes, predictions, likelihood), :likelihood), false)
 
     return outcomes
 end
 
 
-###### MULTISTEP TURING MODEL ######
+
+#########################################
+### TOP-LEVEL TURING MODEL: MULTISTEP ###
+#########################################
 
 ## 1. Types for different operations ##
 # abstract type RegressionOperation end
@@ -101,7 +118,7 @@ end
 #                 labels, 
 #                 operation.regression_label, 
 #             )
-        
+
 #         ## 3.2 For applying a likelihood with a Turing submodel ##
 #         elseif operation isa LikelihoodSubmodel
 
@@ -114,7 +131,7 @@ end
 #             #Pass both to the likelihood model
 #             generated_values[i] ~ to_submodel(prefix(operation.model(predictors_op, outcomes_op; operation.kwargs...), operation.submodel_prefix), false) 
 
-        
+
 #         ## 3.3 For generating new variables with a Turing submodel ##
 #         elseif operation isa GenerationSubmodel
 
