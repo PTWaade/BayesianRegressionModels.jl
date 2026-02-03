@@ -1,6 +1,5 @@
 include(joinpath("..", "src", "BayesianRegressionModels.jl"))
 
-
 ##########################
 ### INPUT FROM FORMULA ###
 ##########################
@@ -124,7 +123,7 @@ observation_labels = DimArray([
         #Regression 1: Performance (df1 has 12 rows)
         ObservationDim(1:12),
         #Regression 2: Accuracy (df2 has 16 rows)
-        ObservationDim(1:16)], regression_labels)
+        ObservationDim(1:12)], regression_labels)
 
 
 # 10. Create labels object #
@@ -508,7 +507,7 @@ random_effect_design_matrices_r2 = DimArray([
 random_effect_level_assignments_r2 = DimArray(hcat(
 
         #Variable 2: Subject (4 levels)
-        repeat([1, 2, 3, 4], inner=4),  # [1,1,1,1, 2,2,2,2, 3,3,3,3, 4,4,44,]
+        repeat([1, 2, 3, 4], inner=3),  # [1,1,1, 2,2,2, 3,3,3, 4,4,4]
     ), (observation_labels[At(:Accuracy)], CategoricalVariableDim([:Subject])))
 
 
@@ -583,18 +582,18 @@ predictors = DimArray([predictors_r1, predictors_r2], regression_labels)
 
 
 
-#####################################
-### 5 IMPLEMENT SIMPLE LIKELIHOOD ###
-#####################################
+################################################
+### 5 IMPLEMENT SIMPLE REGRESSION LIKELIHOOD ###
+################################################
 
 # 1. Set labels for each likelihood and outcome ##
-likelihood_labels = [
+simplereg_likelihood_labels = [
     :Performance,
     :Accuracy
 ]
 
 # 2. Simulate some outcome data for each likelihood ##
-outcomes = (
+simplereg_outcomes = (
     
     #Outcome 1: Performance
     Performance = randn(n_observations_r1),
@@ -604,7 +603,7 @@ outcomes = (
 )
 
 # 3. Set distribution information for each likelihood and outcome ##
-likelihoods = (
+simplereg_likelihoods = (
     
     #Outcome 1: Performance
     DistributionLikelihood(
@@ -621,9 +620,55 @@ likelihoods = (
 
 
 
+###################################################
+### 6 IMPLEMENT MULTISTEP REGRESSION OPERATIONS ###
+###################################################
+#Here, we generate the Age term in the second regression as the outcome of the first regression
+
+## 1. Define labels for all operations ##
+multistep_operation_labels = [:Generate_age, :Accuracy]
+
+## 2. Define operations ##
+multistep_operations = (
+    # The first operation gets the linear combination of the first regression
+    LinearCombinationOperation(:Performance),
+
+    # The second operation is a distribution likelihood, which uses the newly generated Age term from the second regression as the mean of a lognormal distribution for the Accuracy
+    LikelihoodOperation(
+
+        #The likelihood type and its parameters
+        DistributionLikelihood(
+            LogNormal,
+            (μ=(:Accuracy_Age, identity), σ=truncated(Normal(), lower=0))
+        ),
+
+        #The outcomes used in this likelihood
+        (; Accuracy_Age = (:Accuracy, :Age))
+    )
+)
+
+## 3. Define predictor updates ##
+multistep_predictor_updates = (
+    # The output of the first operation is used as the Age predictor in the second (Accuracy) regression
+    UpdatePredictorValues(
+        :Age,
+        [:Accuracy]
+    ),
+    
+    #The second operation is a likelihood, so its outcomes do not have to be saved
+    NoPredictorUpdate()
+)
+
+## 4. Define outcomes for likelihood operations ##
+multistep_outcomes = (;
+    #Outcome 1: Performance
+    Accuracy = rand(LogNormal(), n_observations_r2)
+)
+
+
 
 #################
-### 6 TESTING ###
+### 7 TESTING ###
 #################
 
 ## 1. Test rand() ##
@@ -645,9 +690,18 @@ get_basis_term_values(predictors, (Performance_Age = (:Performance, :Age_first),
 ## 6. Test linear_combination ##
 predictions = linear_combination(predictors, coefficients)
 
-## 6. Test simple regression ##
-model = simple_regression(outcomes, predictors, priors, likelihoods, likelihood_labels)
+## 7. Test simple regression ##
+model = simple_regression(simplereg_outcomes, predictors, priors, simplereg_likelihoods, simplereg_likelihood_labels)
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
+## 8. Test full multistep Turing model ##
+model = multistep_regression(
+    multistep_outcomes,
+    predictors,
+    priors,
+    multistep_operation_labels,
+    multistep_operations,
+    multistep_predictor_updates,
+)
+chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
-## 7. Test full multistep Turing model ##

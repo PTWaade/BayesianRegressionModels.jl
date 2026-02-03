@@ -10,9 +10,9 @@ function expand_into_basis_matrix!(
     target_indices::Vector{Int},
     expansion_type::IdentityExpansion
     ) where {Tbasis_matrix<:AbstractMatrix, Tvalues<:AbstractVector}
-    
+
     #Just insert the values in the basis matrix column
-    basis_matrix[:, target_indices] .= values
+    basis_matrix[:, target_indices] .= parent(values)
     
 end
 

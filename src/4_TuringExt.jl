@@ -93,14 +93,15 @@ end
 ##############################
 ### TOP-LEVEL TURING MODEL ###
 ##############################
+
 @model function multistep_regression(
     outcomes::Toutcomes,
     predictors::Tpredictors,
     prior::Tprior,
-    operations::Toperations,
     operation_labels::Vector{Symbol},
+    operations::Toperations,
     predictor_updates::Tupdates,
-) where {Toutcomes<:NamedTuple, Tpredictors<:AbstractVector{<:RegressionPredictors}, Tprior<:RegressionPrior, Toperations<:NamedTuple, Tupdates<:Tuple{Vararg{<:AbstractPredictorUpdate}}}
+) where {Toutcomes<:NamedTuple, Tpredictors<:AbstractVector{<:RegressionPredictors}, Tprior<:RegressionPrior, Toperations<:Tuple{Vararg{<:AbstractRegressionOperation}}, Tupdates<:Tuple{Vararg{<:AbstractPredictorUpdate}}}
 
     # 1. Sample coefficients
     coefficients ~ prior
@@ -162,9 +163,9 @@ end
                     generated_values
 
                 end
-
+            
             ## 6. Update the regression predictors ##
-            update_variables!(predictors, predictor_update_info.term_labels, generated_values, predictor_update_info.regression_labels)
+            update_variables!(predictors, generated_values, predictor_update_info)
 
             ## 7. Store the generated values in the output tuple ##
             generated_values
@@ -178,7 +179,6 @@ end
     return (all_generated_values = all_generated_values, coefficients = coefficients)
 
 end
-
 
 ###############################
 ### SIMPLE REGRESSION MODEL ###

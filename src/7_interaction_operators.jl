@@ -49,7 +49,7 @@ function update_interaction!(
     basis_matrix::T_basis, 
     component_indices::Vector{Int}, 
     operator_type::MaxOperator
-) where {T_target <: AbstractVector, T_basis <: AbstractMatrix}
+) where {T_target <: AbstractVector{<:Real}, T_basis <: AbstractMatrix{<:Real}}
 
     # Initialize with the first column
     target_column .= view(basis_matrix, :, component_indices[1])
