@@ -98,16 +98,15 @@ function linear_combination(predictors::Tpredictors, coefficients::Tcoefficients
     random_effects = get_random_effects(coefficients)
 
     #Calculate the linear predictions for each regression
-    outcomes = DimArray([
-        linear_combination(
+    outcomes = NamedTuple(
+        regression_label => linear_combination(
             fixed_effects, 
             random_effects, 
             predictors, 
             labels, 
-            r, 
+            regression_label, 
         )
-        for r in labels.regressions
-    ], labels.regressions)
+        for regression_label in labels.regressions)
 
     return outcomes
 end

@@ -240,24 +240,7 @@ end
 
 
 ## 3. High-level dispatches for differnet input structures ##
-# 3.1 Global dispatch when all regressions are targetted
-function update_variables!(
-    predictors::Tpredictors, 
-    terms::Tuple{Vararg{Symbol}}, 
-    values::Tuple{Vararg{AbstractVector}},
-    regression_label::Nothing
-    ) where {Tpredictors <: AbstractVector{<:RegressionPredictors}}
-
-    #For each predictor
-    for predictors_r in predictors
-
-        #Redispatch
-        update_variables!(predictors_r, terms, values)
-
-    end
-end
-
-# 3.2 Dispatch when a single regression is targetted
+# 3.1 Dispatch when a single regression is targetted
 function update_variables!(
     predictors::Tpredictors, 
     terms::Tuple{Vararg{Symbol}}, 
@@ -287,6 +270,23 @@ function update_variables!(
         update_variables!(predictors, terms, values, regression_label)
     end
 
+end
+
+# 3.3 Global dispatch when all regressions are targetted
+function update_variables!(
+    predictors::Tpredictors, 
+    terms::Tuple{Vararg{Symbol}}, 
+    values::Tuple{Vararg{AbstractVector}},
+    regression_label::Nothing
+    ) where {Tpredictors <: AbstractVector{<:RegressionPredictors}}
+
+    #For each predictor
+    for predictors_r in predictors
+
+        #Redispatch
+        update_variables!(predictors_r, terms, values)
+
+    end
 end
 
 # 3.4 Dispatch with a matrix instead of a tuple of vectors
@@ -319,4 +319,24 @@ function update_variables!(
 end
 
 
+########################
+### Getter FUNCTIONS ###
+########################
 
+## Function for extracting specific basis term values from a set of predictors ##
+function get_basis_term_values(
+    predictors::Tpredictors, 
+    target_labels::Tlabels,
+) where {Tpredictors <: AbstractVector{<:RegressionPredictors}, Tlabels <: NamedTuple}
+
+    #Go through each set of labels (regression and term) for the target values
+    values = NamedTuple(
+
+        #Extract the targetted basis matix column from the appropriate predictors object
+        output_label => view(predictors[At(regression_label)].basis_matrix, :, At(basis_term_label))
+
+    for (output_label, (regression_label, basis_term_label)) in pairs(target_labels)
+    )
+
+    return values
+end

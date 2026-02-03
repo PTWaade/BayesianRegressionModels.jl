@@ -1,4 +1,3 @@
-
 include(joinpath("..", "src", "BayesianRegressionModels.jl"))
 
 
@@ -584,20 +583,30 @@ predictors = DimArray([predictors_r1, predictors_r2], regression_labels)
 
 
 
-##############################
-### 5 IMPLEMENT LIKELIHOOD ###
-##############################
+#####################################
+### 5 IMPLEMENT SIMPLE LIKELIHOOD ###
+#####################################
 
-# 1. Simulate some outcome data for each regression ##
+# 1. Set labels for each likelihood and outcome ##
+likelihood_labels = [
+    :Performance,
+    :Accuracy
+]
+
+# 2. Simulate some outcome data for each likelihood ##
 outcomes = (
-    Performance=randn(n_observations_r1),
-    Accuracy=rand(LogNormal(), n_observations_r2)
+    
+    #Outcome 1: Performance
+    Performance = randn(n_observations_r1),
+    
+    #Outcome 2: Accuracy
+    Accuracy = rand(LogNormal(), n_observations_r2)
 )
 
-# 2. Set distribution likelihoods for each regression ##
+# 3. Set distribution information for each likelihood and outcome ##
 likelihoods = (
     
-#Outcome 1: Performance
+    #Outcome 1: Performance
     DistributionLikelihood(
         Normal,
         (μ=(:Performance, identity), σ=truncated(Normal(), lower=0))
@@ -630,12 +639,15 @@ random_effects = get_random_effects(coefficients)
 ## 4. Test updating predictors ##
 update_variables!(predictors, (:Age, :Treatment), (randn(12), rand(1:3, 12)), :Performance)
 
-## 5. Test linear_combination ##
+## 5. Test getter function for predictor basis term values ##
+get_basis_term_values(predictors, (Performance_Age = (:Performance, :Age_first), Accuracy_BMI = (:Accuracy, :BMI)))
+
+## 6. Test linear_combination ##
 predictions = linear_combination(predictors, coefficients)
 
 ## 6. Test simple regression ##
-model = simple_regression(outcomes, predictors, likelihoods, priors)
+model = simple_regression(outcomes, predictors, priors, likelihoods, likelihood_labels)
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
 
-# 6.2. Multistep regression #
+## 7. Test full multistep Turing model ##
