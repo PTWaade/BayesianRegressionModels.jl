@@ -8,7 +8,7 @@ abstract type AbstractRegressionLikelihood end
     outcomes::Toutcomes,
     predictions::Tpredictions,
     likelihood_info::Tlikelihood,
-) where {Toutcomes<:NamedTuple,Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}},Tpredictions<:DimVector}
+) where {Toutcomes<:NamedTuple, Tlikelihood, Tpredictions<:DimVector}
 
     @error "No likelihood model has been implemented for the likelihood type: $Tlikelihood"
 

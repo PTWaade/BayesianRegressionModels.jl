@@ -58,7 +58,10 @@ end
 
                 
             elseif arg isa AbstractVector # If a vector/scalar of values has been specified
+                
+                #Just use it as it is (i.e., a fixed value for each observation)
                 arg
+
             end
         end
 
