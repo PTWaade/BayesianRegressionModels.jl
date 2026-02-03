@@ -5,10 +5,10 @@
 ## Abstract type for likelihood information ##
 abstract type AbstractRegressionLikelihood end
 @model function regression_likelihood(
-    outcomes::Tdata,
+    outcomes::Toutcomes,
     predictions::Tpredictions,
     likelihood_info::Tlikelihood,
-) where {Tdata<:AbstractVector,Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}},Tpredictions<:DimVector}
+) where {Toutcomes<:NamedTuple,Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}},Tpredictions<:DimVector}
 
     @error "No likelihood model has been implemented for the likelihood type: $Tlikelihood"
 
@@ -22,11 +22,11 @@ end
 
 ### Simple Turing model with independent regressions ###
 @model function simple_regression(
-    predictors::Tpredictors,
     outcomes::Toutcomes,
+    predictors::Tpredictors,
+    likelihoods::Tlikelihood,
     priors::Tprior,
-    likelihood::Tlikelihood
-) where {Tpredictors<:AbstractVector{<:RegressionPredictors},Toutcomes<:NamedTuple,Tprior<:RegressionPrior,Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}}}
+) where {Toutcomes<:NamedTuple, Tpredictors<:AbstractVector{<:RegressionPredictors},Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}},Tprior<:RegressionPrior}
 
     # 1. Sample coefficients
     coefficients ~ priors
@@ -35,9 +35,9 @@ end
     predictions = linear_combination(predictors, coefficients)
 
     # 3. Implement likelihood function
-    outcomes ~ to_submodel(prefix(likelihood.model(outcomes, predictions, likelihood), :likelihood), false)
+    imputed_outcomes ~ to_submodel(prefix(regression_likelihood(outcomes, predictions, likelihoods), :likelihood), false)
 
-    return outcomes
+    return imputed_outcomes
 end
 
 

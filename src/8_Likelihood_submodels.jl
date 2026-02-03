@@ -4,16 +4,18 @@
 
 ## 1. Concrete type for carrying information about the single distribution likelihood ##
 struct DistributionLikelihood{T<:Distribution,Targs<:NamedTuple} <: AbstractRegressionLikelihood
+    #The distribution type to be used
     dist::Type{T}
+    #The arguments to be passed to the distribution constructor
     dist_args::Targs
 end
 
 ## 2. Extension of top-level likelihood model ##
 @model function regression_likelihood(
-    outcomes::Tdata,
+    outcomes::Toutcomes,
     predictions::Tpredictions,
     likelihood_info::Tlikelihood,
-) where {Tdata<:NamedTuple,Tlikelihood<:Tuple{Vararg{<:DistributionLikelihood}},Tpredictions<:DimVector}
+) where {Toutcomes<:NamedTuple,Tlikelihood<:Tuple{Vararg{<:DistributionLikelihood}},Tpredictions<:DimVector}
 
     # For each set of outcomes and corresponding likelihood
     for ((key_l, outcomes_l), likelihood) in zip(pairs(outcomes), likelihood_info)
@@ -36,14 +38,17 @@ end
     # Go through every argument and corresponding key for the distribution
     dist_args = Tuple(
         begin
-            # If a symbol has been specified
-            if arg isa Symbol
 
-                # Get the prediction associated with that symbol
-                predictions[At(arg)]
+            if arg isa Tuple{Symbol, Function} # If a symbol has been specified
 
-                # If a prior distribution has been specified
-            elseif arg isa Distribution
+                # Unpack the regression label and the inverse link function
+                (predictions_label, inv_link) = arg
+
+                # Get the prediction associated with that symbol, and transform them using the inverse link function
+                inv_link.(predictions[At(predictions_label)])
+
+            
+            elseif arg isa Distribution # If a prior distribution has been specified
 
                 # Sample the parameter using the key as a prefix
                 param ~ to_submodel(prefix(sample_dist(arg), key), false)
@@ -51,8 +56,8 @@ end
                 # Use it for every observation
                 fill(param, n_observations)
 
-                # If a vector/scalar of values has been specified
-            else
+                
+            elseif arg isa AbstractVector # If a vector/scalar of values has been specified
                 arg
             end
         end
@@ -68,6 +73,6 @@ end
 ## 4. Convenience submodel to allow sampling inside loops ##
 @model function sample_dist(dist)
 
-    return out ~ dist
+    return val ~ dist
 
 end

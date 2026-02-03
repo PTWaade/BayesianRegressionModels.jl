@@ -76,11 +76,11 @@ end
 struct RegressionPredictors{
     Tbasis_matrices<:AbstractMatrix{<:Real},
     Tfixedeffects<:AbstractMatrix{<:Real},
-    Trandomeffects<:AbstractVector{<:AbstractMatrix{<:Real}},
+    Trandomeffects<:AbstractVector{<:AbstractArray{<:Real}},
     Tlevels<:AbstractMatrix{Int},
     Tterms_info<:NamedTuple,
-    Tfixed_interactions <: Vector{<:Union{Nothing, <:InteractionRecipe}}, 
-    Trandom_interactions <: Vector{<:Vector{<:Union{Nothing, <:InteractionRecipe}}}
+    Tfixed_interactions <: AbstractVector{<:Union{Nothing, <:InteractionRecipe}}, 
+    Trandom_interactions <: AbstractVector#{<:AbstractVector{<:Union{Nothing, <:InteractionRecipe}}}
     }
 
     #Matrix (N observations x P+Q total number of predictor terms) which holds all predictors (categorical data in dummy code format) for use in the design matrices
