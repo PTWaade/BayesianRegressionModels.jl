@@ -1,8 +1,7 @@
-######################################
-### PRECREATED EXPANSION FUNCTIONS ###
-######################################
-
-## 1 Default identity expansion type and function ##
+###################################
+### DEFAULT EXPANSION FUNCTIONS ###
+###################################
+## 1. Default identity expansion type and function ##
 struct IdentityExpansion <: AbstractBasisExpansion end
 function expand_into_basis_matrix!(
     values::Tvalues, 
@@ -16,7 +15,7 @@ function expand_into_basis_matrix!(
     
 end
 
-## 2 Default dummy code expansions for categorical variables ##
+## 2. Default dummy code expansions for categorical variables ##
 struct DummyCodeExpansion <: AbstractBasisExpansion end
 function expand_into_basis_matrix!(
     values::Tvalues, 
@@ -35,8 +34,10 @@ function expand_into_basis_matrix!(
 end
 
 
-
-## 3 Functional Basis Expansion ##
+######################################
+### PRECREATED EXPANSION FUNCTIONS ###
+######################################
+## 1. Functional Basis Expansion ##
 # Allows for arbitrary transformations like [x, x^2, log(x)]
 struct FunctionalExpansion{T<:Tuple{Vararg{Function}}} <: AbstractBasisExpansion 
     functions::T
@@ -57,8 +58,7 @@ function expand_into_basis_matrix!(
     end
 end
 
-
-## 4 Polynomial expansion as a special case ##
+## 2. Polynomial expansion as a special case ##
 function PolynomialExpansion(degree::Int)
     return FunctionalExpansion(Tuple(x -> x^p for p in 1:degree))
 end

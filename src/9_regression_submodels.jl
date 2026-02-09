@@ -1,7 +1,6 @@
 ######################################
 ### SIMPLE DISTRIBUTION LIKELIHOOD ###
 ######################################
-
 ## 1. Concrete type for carrying information about the single distribution likelihood ##
 struct DistributionLikelihood{T<:Distribution,Targs<:NamedTuple} <: AbstractRegressionLikelihood
     #The distribution type to be used

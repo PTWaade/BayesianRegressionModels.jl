@@ -1,7 +1,6 @@
 ###############################
 ### SUBMODEL DISPATCH TYPES ###
 ###############################
-
 ## 1. Abstract type for specifying regression likelihoods ##
 abstract type AbstractRegressionLikelihood end
 @model function regression_likelihood(
@@ -29,7 +28,6 @@ end
 ##################
 ### OPERATIONS ###
 ##################
-
 ## 1. Abstract types for different operations in the Turing model ###
 abstract type AbstractRegressionOperation end
 
@@ -58,7 +56,6 @@ end
 #############################
 ### UPDATES TO PREDICTORS ###
 #############################
-
 ## 1. Abstract type for specifying how to update the RegressionPredictors after an operation ##
 abstract type AbstractPredictorUpdate <: AbstractRegressionOperation end
 
@@ -93,7 +90,6 @@ end
 ##############################
 ### TOP-LEVEL TURING MODEL ###
 ##############################
-
 @model function multistep_regression(
     outcomes::Toutcomes,
     predictors::Tpredictors,
@@ -180,10 +176,10 @@ end
 
 end
 
+
 ###############################
 ### SIMPLE REGRESSION MODEL ###
 ###############################
-
 ### Simple Turing model with independent regressions ###
 @model function simple_regression(
     outcomes::Toutcomes,

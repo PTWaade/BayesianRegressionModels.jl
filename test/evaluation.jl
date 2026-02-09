@@ -704,4 +704,3 @@ model = multistep_regression(
     multistep_predictor_updates,
 )
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
-

@@ -1,7 +1,6 @@
-########################################
-### PRECREATED INTERACTION OPERATORS ###
-########################################
-
+#####################################
+### DEFAULT INTERACTION OPERATORS ###
+#####################################
 ## 1. The default multiplication operator ##
 struct MultiplicationOperator <: AbstractInteractionOperator end
 function update_interaction!(
@@ -22,7 +21,10 @@ function update_interaction!(
 
 end
 
-## 2. Addition operator ##
+########################################
+### PRECREATED INTERACTION OPERATORS ###
+########################################
+## 1. Addition operator ##
 struct AdditionOperator <: AbstractInteractionOperator end
 function update_interaction!(
     target_column::T_target, 
@@ -42,7 +44,7 @@ function update_interaction!(
 
 end
 
-## 3. Max operator ##
+## 2. Max operator ##
 struct MaxOperator <: AbstractInteractionOperator end
 function update_interaction!(
     target_column::T_target, 

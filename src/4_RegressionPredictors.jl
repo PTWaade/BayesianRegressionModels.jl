@@ -1,15 +1,13 @@
 #############
 ### TYPES ###
 #############
-
-## 1. Types for keeping information about terms ##
-## 1.1 Abstract type and general function custom expansion functions ##
+## 1. Abstract type and general function custom expansion functions ##
 abstract type AbstractBasisExpansion end
 function expand_into_basis_matrix!(value, basis_matrix, indices, expansion_type::AbstractBasisExpansion)
     error("No expansion function has been implemented for the type $(typeof(expansion_type))")
 end
 
-## 1.2 Abstract type for dispatching operators ##
+## 2. Abstract type for dispatching operators ##
 abstract type AbstractInteractionOperator end
 function update_interaction!(
     target_column::T_target, 
@@ -20,7 +18,7 @@ function update_interaction!(
     error("update_interaction! has not been extended for the operator type: $(typeof(operator_type))")
 end
 
-## 1.3 Type for storing which interaction terms depend on ##
+## 3. Type for storing which interaction terms depend on ##
 struct DependentInteractionIndices
     #Vector of columns in the fixed effects design matrix
     fixed_effects::Vector{Int}
@@ -29,7 +27,7 @@ struct DependentInteractionIndices
     random_effects::Vector{Tuple{Int, Int}}
 end
 
-## 1.4 Type that contains BitSets for makring which interactions to recompute ##
+## 4. Type that contains BitSets for makring which interactions to recompute ##
 struct InteractionUpdateMarkers
     #BitSet of fixed effect design matrix column indices
     fixed_effects::BitSet
@@ -38,8 +36,7 @@ struct InteractionUpdateMarkers
     random_effects::Vector{BitSet}
 end
 
-
-## 1.5 Type for carrying information about a term ##
+## 5. Type for carrying information about a term ##
 Base.@kwdef struct TermInfo{T<:AbstractBasisExpansion}
     
     #Type governing how the basis values are expanded
@@ -61,8 +58,7 @@ Base.@kwdef struct TermInfo{T<:AbstractBasisExpansion}
     dependent_interaction_indices::DependentInteractionIndices
 end
 
-
-# 1.6 Type contianing the recipe for a specific interaction #
+# 6. Type contianing the recipe for a specific interaction #
 struct InteractionRecipe{T<:AbstractInteractionOperator}
     #Columns in the basis matrix that contain the components needed for the interaction
     basis_matrix_indices::Vector{Int}
@@ -71,8 +67,7 @@ struct InteractionRecipe{T<:AbstractInteractionOperator}
     operator::T
 end
 
-
-# 1.7 Struct for keeping predictors and all necessary information #
+# 7. Struct for keeping predictors and all necessary information #
 struct RegressionPredictors{
     Tbasis_matrices<:AbstractMatrix{<:Real},
     Tfixedeffects<:AbstractMatrix{<:Real},
@@ -112,7 +107,6 @@ end
 ########################
 ### UPDATE FUNCTIONS ###
 ########################
-
 ## 1. Function for updating basis and design matrices for a term ##
 function update_matrices!(
     predictors::Tpredictors, 
@@ -320,10 +314,9 @@ end
 
 
 ########################
-### Getter FUNCTIONS ###
+### GETTER FUNCTIONS ###
 ########################
-
-## Function for extracting specific basis term values from a set of predictors ##
+## 1. Function for extracting specific basis term values from a set of predictors ##
 function get_basis_term_values(
     predictors::Tpredictors, 
     target_labels::Tlabels,

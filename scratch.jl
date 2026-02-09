@@ -156,3 +156,24 @@ model = m5(deepcopy(predictors), priors)
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
 
+
+
+
+
+
+using Turing
+
+@model function m(x)
+
+    a ~ Normal(0, 1)
+
+    b ~ Normal(0, 1)
+
+    σ ~ Exponential(1)
+
+    x ~ Normal(a + b, σ)
+
+end
+
+posterior_sampled = sample(m(10), NUTS(), 1000)
+posterior_variational = vi(m, full_rank_gaussian(m), 1000)

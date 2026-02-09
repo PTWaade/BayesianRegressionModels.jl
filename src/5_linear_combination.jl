@@ -1,3 +1,6 @@
+#####################
+### FUNCTIONALITY ###
+#####################
 ## 1. Function for calculating outcomes for a single regression ##
 function linear_combination(; 
     fixed_effects::Tfixed_effects,
@@ -40,8 +43,10 @@ function linear_combination(;
 
 end
 
-
-## Medium-level functions for simplifying input, by allowing inputting the predictors as a single object ##
+##############################
+### CONVENIENCE DISPATCHES ###
+##############################
+## 1. Medium-level functions for simplifying input, by allowing inputting the predictors as a single object ##
 function linear_combination(
     fixed_effects::Tfixed_effects,
     random_effects::Trandom_effects, 
@@ -64,7 +69,7 @@ function linear_combination(
     )
 end
 
-## Medium-level functions for simplifying input, by allowing inputting specifications instead of labels ##
+## 2. Medium-level functions for simplifying input, by allowing inputting specifications instead of labels ##
 function linear_combination(
     fixed_effects::Tfixed_effects,
     random_effects::Trandom_effects, 
