@@ -13,8 +13,8 @@ function linear_combination(;
         Tfixed_effects, Trandom_effects, Tfixed_effects_design_matrix, Trandom_effect_design_matrices, Trandom_effect_level_assignments, Trandom_effect_term_labels
     }
 
-    # 1. Extract labels for the observations in this regression
-    observation_labels = dims(fixed_effect_design_matrix, ObservationDim)
+    # 1. Extract labels for the outcomes in this regression
+    outcome_labels = dims(fixed_effect_design_matrix, OutcomeDim)
 
     # 2. Multiply the fixed effect design matrix with the fixed effects
     outcomes = parent(fixed_effect_design_matrix) * parent(fixed_effects)
@@ -39,7 +39,7 @@ function linear_combination(;
         outcomes .+= sum(parent(random_effect_design_matrix_f) .* parent(random_effects_l), dims=2)
     end
 
-    return DimArray(vec(outcomes), observation_labels)
+    return DimArray(vec(outcomes), outcome_labels)
 
 end
 

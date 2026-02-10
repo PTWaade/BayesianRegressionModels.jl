@@ -1,40 +1,39 @@
-Use @view when creating the design matrices and level assignment matrices!
-
-
 #TODO:
  - Prioritised changes
+   - DEBUG: the DistributionLikelihood doesn't use the observations properly for the likelihood. Fix this; wait for responses from Penny etc
+   - add initialised flag for terms in RegressionPredictors, which stores which terms have been initialised. Interactions with unitialised dependencies are not updated. linear_combination does not work if there are uninitialised terms. get_term_values does not work if used on uninitialised terms.
    - Overload for gradient compat: to_vec(), from_vec_transform(), to_linked_vec_transform(), from_linked_vec_transform()
    - Optimise RegressionPrior
       - Minimise use of DimensionalData where not needed
-    - Make example in evaluation use full multistep functionality
-- Features to consider
-  - Ordinal predictors, ordinal outcomes
+- Things to consider
   - SparseArrays? LazyArrays?
-  - QR decomposition? Orthogonal polar decomposition?
   - Change naming: fixed/random to population/group ?
   - Multi-membership (i.e., an observation can be two random effect levels, and the random effect for that observationis the average or weighted sum of the two levels it belongs to)
-  - Monotonic effects (only for cateogrical/ordinal outcomes I think)
-  - Measurement error (i.e. put a Turing submodel linking the latent predictor to some observed data)
-  - Imputing missing predictors (this needs a model that can generate missing predictor data)
   - Meta-analysis (This needs to able to take standard errors and stuff and go from there)
   - Weighted regression (different weights on different observations, I think by multiplying the logprobs actually)
   - Mixture models (i.e., where multiple distributions are combined in the likelihood, I think)
   - Re-parameterise the intercept:
     (brms): By default, the population-level intercept (if incorporated) is estimated separately and not as part of population-level parameter vector b As a result, priors on the intercept also have to be specified separately. Furthermore, to increase sampling efficiency, the population-level design matrix X is centered around its column means X_means if the intercept is incorporated. This leads to a temporary bias in the intercept equal to <X_means, b>, where <,> is the scalar product. The bias is corrected after fitting the model, but be aware that you are effectively defining a prior on the intercept of the centered design matrix not on the real intercept. You can turn off this special handling of the intercept by setting argument center to FALSE. For more details on setting priors on population-level intercepts, see set_prior.This behavior can be avoided by using the reserved (and internally generated) variable Intercept. Instead of y ~ x, you may write y ~ 0 + Intercept + x. This way, priors can be defined on the real intercept, directly. In addition, the intercept is just treated as an ordinary population-level effect and thus priors defined on b will also apply to it. Note that this parameterization may be less efficient than the default parameterization discussed above.
-  - Allow for sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
+- Planned features?
+  - Ordinal predictors (more complicated - similar to monotonic effects in brms)
+  - Orginal outcomes (just a different likelihood)
+  - Decompositions of the predictors (QR decomposition, Orthogonal polar decomposition)
+  - Allow sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
 - Optimisation
   - Ensure type stability
   - Pre-allocate random effect block assignments
-- Core Utilities
-  - Make constructor function for RegressionPrior
-        - Which construct multivariate distributions from individual priors_f
-        - Which creates default priors or extrapolates single priors to full structure
-        - Which checks that the inputs are all properly structured and matching
-        - Which allows for using symbols to define the levels assignments (these are then transformed into integers)
-   - Make constructor for RegressionPredictors
-      - Which initialises the RegressionPredictors by using update_variables
-  - Make custom summary and plotting functionalities (FlexiChains & MCMCChains)
+- Utilities
+  - Constructor for DistributionLikelihood which
+  - Constructor for RegressionPrior which
+      - construct multivariate distributions from individual priors_f
+      - creates default priors or extrapolates single priors to full structure
+      - checks that the inputs are all properly structured and matching
+      - allows for using symbols to define the levels assignments (these are then transformed into integers)
+   - Constructor for RegressionPredictors which
+      - initialises the RegressionPredictors by using update_variables
+  - Custom summary and plotting functionalities (FlexiChains & MCMCChains)
   - Make Turing submodel alternative to rand and logpdf (and benchmark)
+  - Make constructor for combining multivariate distributions so that they sample vectors
 - Fixes
   - Add comments with canonical mathematical notation   
   - Set full, concrete type requirements everywhere possible
@@ -50,14 +49,14 @@ Use @view when creating the design matrices and level assignment matrices!
   - Make example with sequential sampling model as likelihood
   - Make example with custom likelihoods, interaction operators and expansion functions
   - Make example with multi-step model
-- Near future features
-  - Make preconstructed spike-and-slab prior distribtution 
-  - Make preconstructed horseshoe prior distribution 
-  - Make preconstructed Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
-  - Make constructor for combining multivariate distributions so that they sample vectors
-  - Create standard spline expansion (i.e., an extensions for the spline package)
+- Preconstructed functionalities
+  - Spike-and-slab prior distribtution 
+  - Horseshoe prior distribution 
+  - Variance Component Analysis prior distribtution (letting random effect sd priors come from a multivariate distribution which can weigh between them).
+  - Standard spline expansion (i.e., an extensions for the spline package)
+  - Standard Gaussian process submodel
+  - Standard autporegressive submodel
 - Long-future and difficult features
-  - Structured random effects across levels (e.g., gaussian process, AR1, etc.)
   - Non-parametric, infinite mixture, Dirichlet process models etc (i.e., where not just the level assignments, but also the number of levels, is created inside the Turing model)   
   - Allow for estimating group memberships of random effect levels inside the Turing model
 - Not planned features

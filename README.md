@@ -1,12 +1,6 @@
 # BayesianRegressionModels.jl
 Temporary repository for Julia package for doing Bayesian regression models, using Turing.jl as backend. Inspired by brms and bambi.
 
-
-
-
-
-
-
 ### TERMINOLOGY ###
 - Regression (r): A single regression model. Multiple can be connected.
 - Fixed effect terms (p): The coefficients associated with the predictors (e.g., Intercept, Age, Gender).
@@ -29,6 +23,8 @@ Temporary repository for Julia package for doing Bayesian regression models, usi
 - can update random effect level assignments during the Turing model, so that level assignments can be inferred
 - can use custom expansions, such as polynomial or spline expansions of predictors, even if they created during the model
 - can use custom interaction operators beyond multiplication, even if their basis is created during the TUring model
+- can include measurement error with an appropriate regression submodel
+- can impute missing data byt having missings in data vectors used for distribution likelihoods
 
 ### CONSTRAINTS ###
 - Random effect groups g must be applied across all regressions r 
@@ -42,6 +38,7 @@ Temporary repository for Julia package for doing Bayesian regression models, usi
 
 ### POINTS OF UNCERTAINTY ###
 - adding the jitter to the covariance matrices when reconstructing them for logpdf calculations. Is this done right? How large should it be?
+- Is there a better way than growing the NamedTuple in the model ? A recursive function?
 
 ### DIFFERENCES TO brms ###
 - instead of the gr() syntax for grouping random effects, the grouping should perhaps be passed as a separate argument.

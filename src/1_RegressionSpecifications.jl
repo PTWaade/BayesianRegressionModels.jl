@@ -13,7 +13,7 @@ abstract type RegressionDimension{T} <: DimensionalData.Dimension{T} end
 @dim RandomEffectTermDim RegressionDimension "Random Effect Term"        #q
 @dim RandomEffectGroupDim RegressionDimension "Random Effect Group"      #g
 @dim RandomEffectBlockDim RegressionDimension "Correlation Block"        #b
-@dim ObservationDim RegressionDimension "Observation"                    #n
+@dim OutcomeDim RegressionDimension "Outcome"                            #n
 
 ## 2. Labels struct, containing labels for all components of the regression ##
 struct RegressionLabels{
@@ -25,7 +25,7 @@ struct RegressionLabels{
     Trandom_effect_terms,
     Trandom_effect_groups,
     Trandom_effect_blocks,
-    Tobservations
+    Toutcomes
 }
     #Vector (R regressions) of regression labels
     regressions::Tregressions
@@ -51,8 +51,8 @@ struct RegressionLabels{
     #Vector (F random effect factors) of vectors (B random effect blocks) of block labels
     random_effect_blocks::Trandom_effect_blocks
 
-    #Vector (R regressions) of vectors (N observations) of observation labels
-    observations::Tobservations
+    #Vector (R regressions) of vectors (N outcomes) of regression outcome labels
+    outcomes::Toutcomes
 
 end
 

@@ -1,103 +1,85 @@
-###############################
-### SUBMODEL DISPATCH TYPES ###
-###############################
-## 1. Abstract type for specifying regression likelihoods ##
-abstract type AbstractRegressionLikelihood end
-@model function regression_likelihood(
-    outcomes::Toutcomes,
-    predictions::Tpredictions,
-    likelihood_info::Tlikelihood_info,
-) where {Toutcomes<:AbstractVector, Tpredictions<:DimVector, Tlikelihood_info<:AbstractRegressionLikelihood,}
-
-    @error "A likelihood has not been implemented for the type $Tlikelihood_info"
-
-end
-
-## 2. Abstract type for specifying submodels that generate new values ##
-abstract type AbstractGenerationModel end
-@model function generate_values(
-    predictions::Tpredictions,
-    generation_info::Tgeneration_info,
-) where {Tpredictions<:DimVector, Tgeneration_info<:AbstractGenerationModel}
-
-    @error "A generation model has not been implemented for the type $Tgeneration_info"
-
-end
-
-
-##################
-### OPERATIONS ###
-##################
-## 1. Abstract types for different operations in the Turing model ###
-abstract type AbstractRegressionOperation end
-
-## 2. Concrete dispatch type for perforning a linear combination of predictors and coefficients ##
-struct LinearCombinationOperation <: AbstractRegressionOperation 
-    regression_label::Symbol
-end
-
-## 3. Concrete dispatch type for likelihood operations ##
-struct LikelihoodOperation{Tlikelihood<:AbstractRegressionLikelihood, Tlabels <: NamedTuple} <: AbstractRegressionOperation
-    # The likelihood dispatch type
-    likelihood::Tlikelihood
-    # Labels for basis matrix values to use as predictors (NamedTuple with keys as outcome labels and values as (regression_label, term_label) tuples)
-    target_labels::Tlabels
-end
-
-## 3. Concrete dispatch type for generating new data with a Turing submodel##
-struct GenerationOperation{Tgeneration<:AbstractGenerationModel, Tlabels <: NamedTuple} <: AbstractRegressionOperation
-    # The generation submodel dispatch type
-    generation::Tgeneration
-    # Labels for basis matrix values to use as predictors (NamedTuple with keys as outcome labels and values as (regression_label, term_label) tuples)
-    target_labels::Tlabels
-end
-
-
-#############################
-### UPDATES TO PREDICTORS ###
-#############################
+##############################
+### PREDICTOR UPDATE TYPES ###
+##############################
 ## 1. Abstract type for specifying how to update the RegressionPredictors after an operation ##
-abstract type AbstractPredictorUpdate <: AbstractRegressionOperation end
+abstract type AbstractPredictorUpdate end
 
 ## 2. Concrete type and dispatch for not updating the RegressionPredictors ##
 struct NoPredictorUpdate <: AbstractPredictorUpdate end
-function update_variables!(
-    predictors::Tpredictors, 
-    generated_values::Tgenerated_values, 
+function update_predictors!(
+    predictors::Tpredictors,
+    generated_values::Tgenerated_values,
     update_info::NoPredictorUpdate
-    ) where {Tpredictors<:AbstractVector{<:RegressionPredictors}, Tgenerated_values<:AbstractVector}
-    
+) where {Tpredictors<:AbstractVector{<:RegressionPredictors},Tgenerated_values<:AbstractVector}
+
     return nothing
 
 end
 
 ## 3. Concrete type and dispatch for updating the RegressionPredictors ##
-struct UpdatePredictorValues <: AbstractPredictorUpdate
+struct UpdatePredictors <: AbstractPredictorUpdate
     term_label::Symbol
     regression_labels::Vector{Symbol}
 end
-function update_variables!(
-    predictors::Tpredictors, 
-    generated_values::Tgenerated_values, 
-    update_info::UpdatePredictorValues
-    ) where {Tpredictors<:AbstractVector{<:RegressionPredictors}, Tgenerated_values<:AbstractVector}
-    
-   update_variables!(predictors, update_info.term_label, generated_values, update_info.regression_labels)
+function update_predictors!(
+    predictors::Tpredictors,
+    generated_values::Tgenerated_values,
+    update_info::UpdatePredictors
+) where {Tpredictors<:AbstractVector{<:RegressionPredictors},Tgenerated_values<:AbstractVector}
 
+    update_predictors!(predictors, update_info.term_label, generated_values, update_info.regression_labels)
+
+end
+
+
+#######################
+### OPERATION types ###
+#######################
+## 1. Abstract types for different operations in the Turing model ###
+abstract type AbstractRegressionOperation end
+
+## 2. Concrete dispatch type for perforning a linear combination of predictors and coefficients ##
+struct LinearCombination <: AbstractRegressionOperation end
+
+## 3. Abstract type for using Turing submodels ###
+abstract type AbstractRegressionSubmodel <: AbstractRegressionOperation end 
+@model function regression_submodel(
+    submodel_info::Tsubmodel,
+    outcomes::Toutcomes,
+    predictors::Tpredictors,
+) where {Tsubmodel<:AbstractRegressionSubmodel, Toutcomes<:NamedTuple, Tpredictors<:AbstractVector{<:RegressionPredictors}}
+
+    @error "A Turing submodel has not been implemented for the type $Tsubmodel"
+
+end
+## 4. Container struct for the operation and update information
+struct RegressionOperation{Toperation<:AbstractRegressionOperation, Tupdate<:AbstractPredictorUpdate}
+    operation_info::Toperation
+    predictor_update::Tupdate
+    store_outcome::Bool
+
+    function RegressionOperation(
+        operation::Toperation, 
+        predictor_update::Tupdate = NoPredictorUpdate(); 
+        store_outcome::Bool = false 
+        ) where {Toperation<:AbstractRegressionOperation, Tupdate<:AbstractPredictorUpdate}
+        return new{Toperation, Tupdate}(operation, predictor_update, store_outcome)
+    end
 end
 
 
 ##############################
 ### TOP-LEVEL TURING MODEL ###
 ##############################
-@model function multistep_regression(
-    outcomes::Toutcomes,
+## 1. Full multi-step regression model ##
+@model function regression_model(
     predictors::Tpredictors,
     prior::Tprior,
-    operation_labels::Vector{Symbol},
     operations::Toperations,
-    predictor_updates::Tupdates,
-) where {Toutcomes<:NamedTuple, Tpredictors<:AbstractVector{<:RegressionPredictors}, Tprior<:RegressionPrior, Toperations<:Tuple{Vararg{<:AbstractRegressionOperation}}, Tupdates<:Tuple{Vararg{<:AbstractPredictorUpdate}}}
+) where {Tpredictors<:AbstractVector{<:RegressionPredictors},Tprior<:RegressionPrior,Toperations<:NamedTuple}
+
+    # 0. Prepare outcome container
+    outcomes = (;)
 
     # 1. Sample coefficients
     coefficients ~ prior
@@ -110,109 +92,44 @@ end
     #Collection of labels
     labels = coefficients.specifications.labels
 
-    # Apply operations one at a time #
-    all_generated_values = Tuple(
-        begin
-            
-            #Store values generated by the observation
-            generated_values = 
+    #For each regression operation
+    for (operation_label, val) in pairs(operations)
 
-                ## 3. For calculating linear combinations ##
-                if operation isa LinearCombinationOperation
-                
-                    # Apply the linear combination
-                    generated_values = linear_combination(
-                        fixed_effects, 
-                        random_effects, 
-                        predictors, 
-                        labels, 
-                        operation.regression_label,
-                    )
+        #Unpack the operation
+        operation = val.operation_info
+        store_outcome = val.store_outcome
+        predictor_update = val.predictor_update
 
-                    # Store the output
-                    generated_values
-            
-                ## 4. For applying a likelihood ##
-                elseif operation isa LikelihoodOperation
-                
-                    # Get the outcome data for this likelihood
-                    outcomes_l = outcomes[operation_label]
+        ## 3. For calculating linear combinations ##
+        if operation isa LinearCombination
 
-                    # Get the predictions for this likelihood
-                    predictions_l = get_basis_term_values(predictors, operation.target_labels)
+            #Apply the linear combination
+            generated_values = linear_combination(
+                fixed_effects,
+                random_effects,
+                predictors,
+                labels,
+                operation_label,
+            )
 
-                    # Apply the likelihood submodel
-                    generated_values ~ to_submodel(prefix(regression_likelihood(outcomes_l, predictions_l, operation.likelihood), operation_label), false)
+        ## 4. For applying a Turing submodel as likelihood or to generate values ##
+        elseif operation isa AbstractRegressionSubmodel
 
-                    # Store the output
-                    generated_values
-
-
-                ## 5. For generating new values with a submodel ##
-                elseif operation isa GenerationOperation
-                
-                    # Get the predictions for this likelihood
-                    predictions_l = get_basis_term_values(predictors, operation.target_labels)
-
-                    generated_values ~ to_submodel(prefix(generate_values(predictions_l, operation.generation), operation_label), false)
-
-                    generated_values
-
-                end
-            
-            ## 6. Update the regression predictors ##
-            update_variables!(predictors, generated_values, predictor_update_info)
-
-            ## 7. Store the generated values in the output tuple ##
-            generated_values
+            #Apply the Turing submodel (likelihood and/or generation values)
+            generated_values ~ to_submodel(prefix(regression_submodel(operation, outcomes, predictors), operation_label), false)
 
         end
-        for (operation_label, operation, predictor_update_info) in zip(operation_labels, operations, predictor_updates)
-    )
 
+        ## 5. Store the output in the predictions object ##
+        if store_outcome
+            outcomes = merge(outcomes, NamedTuple{(operation_label,)}((generated_values,)))
+        end
 
-    # Return the generated values and the coefficients for postprocessing
-    return (all_generated_values = all_generated_values, coefficients = coefficients)
+        ## 6. Update the regression predictors ##
+        update_predictors!(predictors, generated_values, predictor_update)
 
-end
-
-
-###############################
-### SIMPLE REGRESSION MODEL ###
-###############################
-### Simple Turing model with independent regressions ###
-@model function simple_regression(
-    outcomes::Toutcomes,
-    predictors::Tpredictors,
-    prior::Tprior,
-    likelihoods::Tlikelihood,
-    likelihood_labels::Vector{Symbol},
-) where {Toutcomes<:NamedTuple, Tpredictors<:AbstractVector{<:RegressionPredictors}, Tprior<:RegressionPrior, Tlikelihood<:Tuple{Vararg{<:AbstractRegressionLikelihood}}}
-
-    # 1. Sample coefficients
-    coefficients ~ prior
-
-    # 2. Calculate predictions
-    predictions = linear_combination(predictors, coefficients)
-
-    # 3. Implement likelihood function
-    imputed_outcomes ~ to_submodel(prefix(multiple_regression_likelihoods(outcomes, predictions, likelihoods, likelihood_labels), :likelihood), false)
-
-    return imputed_outcomes
-end
-
-## Turing submodel for applying multiple likelihoods to outcomes and predictions ##
-@model function multiple_regression_likelihoods(
-    outcomes::Toutcomes,
-    predictions::Tpredictions,
-    likelihoods::Tlikelihoods,
-    likelihood_labels::Vector{Symbol},
-) where {Toutcomes<:NamedTuple,Tlikelihoods<:Tuple{Vararg{<:AbstractRegressionLikelihood}},Tpredictions<:NamedTuple}
-
-    # For each set of outcomes and corresponding likelihood
-    for (label_l, outcomes_l, likelihood_l) in zip(likelihood_labels, outcomes, likelihoods)
-        # Apply the distribution likelihood model
-        outcomes_l ~ to_submodel(prefix(regression_likelihood(outcomes_l, predictions, likelihood_l), label_l), false)
     end
 
+    #Return the generated values and the coefficients for postprocessing
+    return (coefficients = coefficients, predictors = predictors, outcomes = outcomes)
 end

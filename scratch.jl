@@ -177,3 +177,57 @@ end
 
 posterior_sampled = sample(m(10), NUTS(), 1000)
 posterior_variational = vi(m, full_rank_gaussian(m), 1000)
+
+
+
+
+for (i1, i2) in zip(zip(([1,2,3], [4,5,6])), zip((;)))
+    
+    print(i1...)
+    print(i2...)
+end
+
+
+
+
+PredictorTarget(:reg1, [:Age])
+
+typeof(identity)
+
+
+
+Normal.([1,2,3]...)
+
+
+# This works if you have multiple vectors of arguments
+mus = [1, 2, 3]
+sigmas = [0.1, 0.2, 0.3]
+
+args = [mus, sigmas]
+
+# This creates [Normal(1, 0.1), Normal(2, 0.2), Normal(3, 0.3)]
+dists = Normal.(args...)
+
+
+zz = (gg = [1,2,3],)
+
+zz.gg .= [10, 10, 10]
+
+getproperty(zz, :gg) .= [10, 10, 10]
+
+
+
+
+
+@model function gg()
+
+    mu ~ Normal()
+
+    x = 1
+
+    x ~ Normal(mu, 1)
+end
+
+m = gg()
+
+sample(m, NUTS(), 1000)

@@ -152,7 +152,7 @@ end
 
 
 ## 2. Mediun-level dispatch for updating multiple variables in the predictors object ##
-function update_variables!(
+function update_predictors!(
     predictors::Tpredictors, 
     terms::Tuple{Vararg{Symbol}}, 
     values::Tuple{Vararg{AbstractVector}},
@@ -235,7 +235,7 @@ end
 
 ## 3. High-level dispatches for differnet input structures ##
 # 3.1 Dispatch when a single regression is targetted
-function update_variables!(
+function update_predictors!(
     predictors::Tpredictors, 
     terms::Tuple{Vararg{Symbol}}, 
     values::Tvalues,
@@ -246,12 +246,12 @@ function update_variables!(
     predictors_r = predictors[At(regression_label)]
 
     #Redispatch
-    update_variables!(predictors_r, terms, values)
+    update_predictors!(predictors_r, terms, values)
 
 end
 
 # 3.3 Dispatch when multiple regressions are targetted
-function update_variables!(
+function update_predictors!(
     predictors::Tpredictors, 
     terms::Tuple{Vararg{Symbol}}, 
     values::Tuple{Vararg{<:AbstractVector}},
@@ -261,13 +261,13 @@ function update_variables!(
     #For each regression
     for regression_label in regression_labels
         #Redispatch
-        update_variables!(predictors, terms, values, regression_label)
+        update_predictors!(predictors, terms, values, regression_label)
     end
 
 end
 
 # 3.3 Global dispatch when all regressions are targetted
-function update_variables!(
+function update_predictors!(
     predictors::Tpredictors, 
     terms::Tuple{Vararg{Symbol}}, 
     values::Tuple{Vararg{AbstractVector}},
@@ -278,13 +278,13 @@ function update_variables!(
     for predictors_r in predictors
 
         #Redispatch
-        update_variables!(predictors_r, terms, values)
+        update_predictors!(predictors_r, terms, values)
 
     end
 end
 
 # 3.4 Dispatch with a matrix instead of a tuple of vectors
-function update_variables!(
+function update_predictors!(
     predictors::Tpredictors, 
     terms::Tuple{Vararg{Symbol}}, 
     values::Tvalues,
@@ -295,20 +295,21 @@ function update_variables!(
     views_tuple = Tuple(view(values, :, i) for i in 1:size(values, 2))
 
     #Redispatch
-    update_variables!(predictors, terms, views_tuple, regression_label)
+    update_predictors!(predictors, terms, views_tuple, regression_label)
 
 end
 
 
 # 3.5 Dispatch with only a single variable being updated
-function update_variables!(
+function update_predictors!(
     predictors::Tpredictors, 
     term::Symbol, 
     values::Tvalues,
     regression_label::Union{Symbol, Vector{Symbol}, Nothing} = nothing
 ) where {Tpredictors <: AbstractVector{<:RegressionPredictors}, Tvalues <: AbstractVector}
+    
     #Make the term and the value into a Vector and a tuple and redispatch
-    update_variables!(predictors, (term,), (values,), regression_label)
+    update_predictors!(predictors, (term,), (values,), regression_label)
 
 end
 
@@ -316,20 +317,51 @@ end
 ########################
 ### GETTER FUNCTIONS ###
 ########################
-## 1. Function for extracting specific basis term values from a set of predictors ##
-function get_basis_term_values(
+## 1. Struct for specifying a linear prediction to extract ##
+struct ExtractOutcome{T<:Function}
+
+    #Which regression prediction to use
+    regression_label::Symbol
+
+    #Inverse link transformation
+    inv_link::T
+
+    #Internal constructor with identity as default inv_link
+    function ExtractOutcome(reg::Symbol, inv_link::T = identity) where {T<:Function}
+        return new{T}(reg, inv_link)
+    end
+
+end
+
+## 2. Struct for specifying a predictor to extract ##
+struct ExtractPredictors{T<:Function}
+
+    #Which regression to take predictors from
+    regression_label::Symbol
+    
+    #Which terms to take
+    term_labels::Vector{Symbol}
+
+    #Inverse link transformation
+    inv_link::T
+
+    #Internal constructor with identity as default inv_link
+    function ExtractPredictors(reg::Symbol, terms::Vector{Symbol}, inv_link::T = identity) where {T<:Function}
+        return new{T}(reg, terms, inv_link)
+    end
+end
+
+## 3. Function for extracting specific basis term values from a set of predictors ##
+function get_predictor_values(
     predictors::Tpredictors, 
-    target_labels::Tlabels,
-) where {Tpredictors <: AbstractVector{<:RegressionPredictors}, Tlabels <: NamedTuple}
+    target::Ttarget
+) where {Tpredictors <: AbstractVector{<:RegressionPredictors}, Ttarget <: ExtractPredictors}
 
-    #Go through each set of labels (regression and term) for the target values
-    values = NamedTuple(
+    #Extract the appropriate basis matrix columns and transform them with the inverse link function
+    return parent( #TODO: remove parent call here if not using DimArray basis matrix
+        target.inv_link.(
+            view(predictors[At(target.regression_label)].basis_matrix, :, At(target.term_labels))
+            )
+        )
 
-        #Extract the targetted basis matix column from the appropriate predictors object
-        output_label => view(predictors[At(regression_label)].basis_matrix, :, At(basis_term_label))
-
-    for (output_label, (regression_label, basis_term_label)) in pairs(target_labels)
-    )
-
-    return values
 end
