@@ -6,7 +6,7 @@
    - add initialised flag for terms in RegressionPredictors, which stores which terms have been initialised. Interactions with unitialised dependencies are not updated. linear_combination does not work if there are uninitialised terms. get_term_values does not work if used on uninitialised terms.
    - Ensure that DualNumbers can be used throughout
 - Planned features?
-  - Ordinal predictors (more complicated - similar to monotonic effects in brms)
+  - Ordinal predictors (more complicated - similar to monotonic effects in brms. Seems doable, but needs to be able to parameterise basis term expansions)
   - Orginal outcomes (just a different likelihood)
   - Decompositions of the predictors (QR decomposition, Orthogonal polar decomposition)
   - Allow sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
