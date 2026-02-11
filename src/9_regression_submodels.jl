@@ -174,11 +174,13 @@ end
     )
 
     # 5. Evaluate corresponding likelihood distributions for each outcome
-    observations ~ product_distribution(likelihood_info.dist.(dist_args...; dist_kwargs...))
+    imputed_observations ~ to_submodel(evaluate_observations(
+            observations, 
+            product_distribution(likelihood_info.dist.(dist_args...; dist_kwargs...))
+        ), false)
 
-    @show observations
-
-    return observations
+    # 6. Return (potentially imputed) observations
+    return imputed_observations
 
 end
 
@@ -186,5 +188,14 @@ end
 @model function sample_dist(dist)
 
     return val ~ dist
+
+end
+
+## 4. Convenience submodel to allow evaluating the observations (they have to be a model argument)
+@model function evaluate_observations(observations::Tobservations, dist::Tdist) where {Tobservations<:AbstractArray, Tdist <: Distribution}
+
+    observations ~ dist
+
+    return observations
 
 end
