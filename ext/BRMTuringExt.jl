@@ -19,7 +19,7 @@ using FlexiChains
         observations = likelihood_info.observations
 
         #If they are to be extracted from the predictors
-    elseif likelihood_info.observations isa ExtractPredictors
+    elseif likelihood_info.observations isa BRM.ExtractPredictors
 
         #Extract the corresponding, transformed, predictors
         observations = BRM.get_predictor_values(predictors, likelihood_info.observations)
