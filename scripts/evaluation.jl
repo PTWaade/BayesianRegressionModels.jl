@@ -1,4 +1,8 @@
-include(joinpath("..", "src", "BayesianRegressionModels.jl"))
+import BayesianRegressionModels as BRM
+using DimensionalData: DimArray, At
+using Distributions: Normal, Gamma, product_distribution, LKJCholesky, logpdf
+using Turing: sample, Prior, @varname
+using FlexiChains: VNChain
 
 ##########################
 ### INPUT FROM FORMULA ###
@@ -32,42 +36,42 @@ include(joinpath("..", "src", "BayesianRegressionModels.jl"))
 ########################
 
 # 1. Labels for the different regressions
-regression_labels = RegressionDim([:BMI, :performance_mean, :performance_sd])
+regression_labels = BRM.RegressionDim([:BMI, :performance_mean, :performance_sd])
 
 
 # 2. Labels for the levels of the categorical variables
 categorical_level_labels = DimArray([
 
         #Variable 1: Treatment
-        CategoricalLevelDim([:Low, :Medium, :High]),
+        BRM.CategoricalLevelDim([:Low, :Medium, :High]),
 
         #Variable 2: Subject
-        CategoricalLevelDim([:Subj1, :Subj2, :Subj3, :Subj4]),
+        BRM.CategoricalLevelDim([:Subj1, :Subj2, :Subj3, :Subj4]),
 
         #Variable 3: Experimenter
-        CategoricalLevelDim([:Exp1, :Exp2, :Exp3]),
+        BRM.CategoricalLevelDim([:Exp1, :Exp2, :Exp3]),
 
         #Variable 4: ClinicalGroup
-        CategoricalLevelDim([:ControlGroup, :TargetGroup])
+        BRM.CategoricalLevelDim([:ControlGroup, :TargetGroup])
         
-    ], CategoricalVariableDim([:Treatment, :Subject, :Experimenter, :ClinicalGroup]))
+    ], BRM.CategoricalVariableDim([:Treatment, :Subject, :Experimenter, :ClinicalGroup]))
 
 
 # 3. Labels of basis terms (no interactions)
 basis_term_labels = DimArray([
 
         #Regression 1: BMI
-        BasisTermDim([
+        BRM.BasisTermDim([
             :Intercept    
         ]),
 
         #Regression 2: performance_mean
-        BasisTermDim([
+        BRM.BasisTermDim([
             :Intercept, :Age_first, :Age_second, :Treatment_Medium, :Treatment_High
         ]),
 
         #Regression 3: performance_sd
-        BasisTermDim([
+        BRM.BasisTermDim([
             :Intercept, :Age, :BMI
         ]),
     
@@ -78,17 +82,17 @@ basis_term_labels = DimArray([
 fixed_effect_term_labels = DimArray([
 
         # Regression 1: BMI  
-        FixedEffectTermDim([
+        BRM.FixedEffectTermDim([
             :Intercept
         ]),    
 
         # Regression 2: performance_mean
-        FixedEffectTermDim([
+        BRM.FixedEffectTermDim([
             :Intercept, :Age_first, :Age_second, :Treatment_Medium, :Treatment_High, :Age_x_Treatment_Medium, :Age_x_Treatment_High
         ]),
 
         # Regression 3: performance_sd
-        FixedEffectTermDim([
+        BRM.FixedEffectTermDim([
             :Intercept, :Age, :BMI, :Age_x_BMI, :max_age_BMI,
         ])
         
@@ -96,7 +100,7 @@ fixed_effect_term_labels = DimArray([
 
 
 # 5. Labels for the random effect factors
-random_effect_factor_labels = RandomEffectFactorDim([:Subject, :Experimenter])
+random_effect_factor_labels = BRM.RandomEffectFactorDim([:Subject, :Experimenter])
 
 
 # 6. Labels for the random effect terms in the design matrices
@@ -106,9 +110,9 @@ random_effect_term_labels = DimArray([
         DimArray([
                 
             # Factor 1: Subject
-            RandomEffectTermDim(Symbol[]),
+            BRM.RandomEffectTermDim(Symbol[]),
             # Factor 2: Experimenter
-            RandomEffectTermDim(Symbol[])
+            BRM.RandomEffectTermDim(Symbol[])
         
         ], random_effect_factor_labels),
 
@@ -116,9 +120,9 @@ random_effect_term_labels = DimArray([
         DimArray([
 
             #Factor 1: Subject
-            RandomEffectTermDim([:Intercept, :Treatment_Medium, :Treatment_High]),
+            BRM.RandomEffectTermDim([:Intercept, :Treatment_Medium, :Treatment_High]),
             #Factor 2: Experimenter
-            RandomEffectTermDim([:Intercept, :Age_first])
+            BRM.RandomEffectTermDim([:Intercept, :Age_first])
                 
         ], random_effect_factor_labels),
 
@@ -126,9 +130,9 @@ random_effect_term_labels = DimArray([
         DimArray([
 
             #Factor 1: Subject
-            RandomEffectTermDim([:Intercept, :Age, :BMI, :Age_x_BMI]),
+            BRM.RandomEffectTermDim([:Intercept, :Age, :BMI, :Age_x_BMI]),
             #Factor 2: Experimenter (not present in the formula)
-            RandomEffectTermDim(Symbol[])
+            BRM.RandomEffectTermDim(Symbol[])
 
         ], random_effect_factor_labels)
     
@@ -139,10 +143,10 @@ random_effect_term_labels = DimArray([
 random_effect_group_labels = DimArray([
 
         #Factor 1: Subject (get the levels from the categorical levels container)
-        RandomEffectGroupDim(parent(categorical_level_labels[At(:ClinicalGroup)])),
+        BRM.RandomEffectGroupDim(parent(categorical_level_labels[At(:ClinicalGroup)])),
 
         #Factor 2: Experimenter (no group specified, so use a single group)
-        RandomEffectGroupDim([:SingleGroup])
+        BRM.RandomEffectGroupDim([:SingleGroup])
 
     ], random_effect_factor_labels)
 
@@ -151,10 +155,10 @@ random_effect_group_labels = DimArray([
 random_effect_block_labels = DimArray([
 
         #Factor 1: Subject (ResidualBlock has all unnasigned terms in the factor)
-        RandomEffectBlockDim([:Block1, :Block2, :ResidualBlock]),
+        BRM.RandomEffectBlockDim([:Block1, :Block2, :ResidualBlock]),
 
         #Factor 2: Experimenter (no blocks specified, so use a single block)
-        RandomEffectBlockDim([:SingleBlock])
+        BRM.RandomEffectBlockDim([:SingleBlock])
         
     ], random_effect_factor_labels)
 
@@ -163,19 +167,19 @@ random_effect_block_labels = DimArray([
 outcome_labels = DimArray([
 
         #Regression 1: BMI
-        OutcomeDim(1:12),
+        BRM.OutcomeDim(1:12),
 
         #Regression 2: performance_mean
-        OutcomeDim(1:12),
+        BRM.OutcomeDim(1:12),
 
         #Regression 2: performance_sd
-        OutcomeDim(1:12)
+        BRM.OutcomeDim(1:12)
         
     ], regression_labels)
 
 
 # 10. Create labels object #
-labels = RegressionLabels(
+labels = BRM.RegressionLabels(
     regression_labels,
     categorical_level_labels,
     basis_term_labels,
@@ -247,20 +251,20 @@ block_assignments = DimArray([
 random_effect_geometries = DimArray([
 
         #Factor 1: Subject
-        NonCentered,
+        BRM.NonCentered,
 
         #Factor 2: Experimenter
-        Centered
+        BRM.Centered
 
     ], random_effect_factor_labels)
 
 
 ## 4. Generate indices for mapping from flattened vector to structured coefficients ##
-(fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices) = generate_indices(labels, block_assignments)
+(fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices) = BRM.generate_indices(labels, block_assignments)
 
 
 ## 5. Create specifications object ##
-specifications = RegressionSpecifications(group_assignments, block_assignments, random_effect_geometries, fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices, labels)
+specifications = BRM.RegressionSpecifications(group_assignments, block_assignments, random_effect_geometries, fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices, labels)
 
 
 
@@ -443,7 +447,7 @@ fixed_effect_priors_gathered = product_distribution([prior_p for priors_r in fix
 random_effect_sd_priors_gathered = product_distribution([prior_q for priors_r in random_effect_sd_priors for priors_f in priors_r for priors_g in priors_f for prior_q in priors_g])
 
 ## 5. Make final prior object ##
-priors = RegressionPrior(fixed_effect_priors_gathered, random_effect_sd_priors_gathered, random_effect_correlation_LKJcholesky_priors, specifications)
+priors = BRM.RegressionPrior(fixed_effect_priors_gathered, random_effect_sd_priors_gathered, random_effect_correlation_LKJcholesky_priors, specifications)
 
 
 
@@ -484,10 +488,10 @@ fixed_effects_design_matrix_r1 = DimArray(hcat(
 random_effect_design_matrices_r1 = DimArray([
 
     # Factor 1: Subject (0 terms)
-    DimArray(Matrix{Float64}(undef, n_outcomes_r1, 0), (outcome_labels[At(:BMI)], RandomEffectTermDim(Symbol[]))),
+    DimArray(Matrix{Float64}(undef, n_outcomes_r1, 0), (outcome_labels[At(:BMI)], BRM.RandomEffectTermDim(Symbol[]))),
 
     # Factor 2: Experimenter (0 terms)
-    DimArray(Matrix{Float64}(undef, n_outcomes_r1, 0), (outcome_labels[At(:BMI)], RandomEffectTermDim(Symbol[])))
+    DimArray(Matrix{Float64}(undef, n_outcomes_r1, 0), (outcome_labels[At(:BMI)], BRM.RandomEffectTermDim(Symbol[])))
         
 ], random_effect_factor_labels)
 
@@ -497,7 +501,7 @@ random_effect_level_assignments_r1 = DimArray(
     #No random effect factors
     Matrix{Int}(undef, n_outcomes_r1, 0), 
 
-    (outcome_labels[At(:BMI)], CategoricalVariableDim(Symbol[]))
+    (outcome_labels[At(:BMI)], BRM.CategoricalVariableDim(Symbol[]))
 )
 
 ## 6. Create interaction recipes ##
@@ -507,31 +511,31 @@ fixed_effects_interaction_recipes_r1 = [
 
 random_effects_interaction_recipes_r1 = DimArray([
         # Factor 1: Subject (0 terms)
-        Vector{Union{Nothing,InteractionRecipe{MultiplicationOperator}}}(),
+        Vector{Union{Nothing,BRM.InteractionRecipe{BRM.MultiplicationOperator}}}(),
 
         # Factor 2: Experimenter (0 terms)
-        Vector{Union{Nothing,InteractionRecipe{MultiplicationOperator}}}()
+        Vector{Union{Nothing,BRM.InteractionRecipe{BRM.MultiplicationOperator}}}()
     ], random_effect_factor_labels)
 
 ## 7. Create info for each term ##
 terms_info_r1 = (
     
     #Intercept info
-    Intercept=TermInfo(
-        basis_expansion_type=IdentityExpansion(),
+    Intercept=BRM.TermInfo(
+        basis_expansion_type=BRM.IdentityExpansion(),
         basis_matrix_indices=[1],
         fixed_effects_indices=[1],
         random_effects_indices=Tuple{Int,Vector{Int}}[],
         level_assignments_idx=0,
-        dependent_interaction_indices=DependentInteractionIndices(Int[], Tuple{Int,Int}[])), 
+        dependent_interaction_indices=BRM.DependentInteractionIndices(Int[], Tuple{Int,Int}[])), 
 
 )
 
 ## 8. Create container for marking interaction effects for being updated ##
-interaction_udpate_markers_r1 = InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r1)])
+interaction_udpate_markers_r1 = BRM.InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r1)])
 
 ## 9. Instantiate predictors ##
-predictors_r1 = RegressionPredictors(
+predictors_r1 = BRM.RegressionPredictors(
     basis_matrix_r1,
     fixed_effects_design_matrix_r1,
     random_effect_design_matrices_r1,
@@ -601,82 +605,82 @@ random_effect_level_assignments_r2 = DimArray(hcat(
 
         #Variable 3: Experimenter (3 levels)
         repeat([1, 2, 3], outer=4),     # [1,2,3, 1,2,3, 1,2,3, 1,2,3]
-    ), (outcome_labels[At(:performance_mean)], CategoricalVariableDim([:Subject, :Experimenter])))
+    ), (outcome_labels[At(:performance_mean)], BRM.CategoricalVariableDim([:Subject, :Experimenter])))
 
 
 ## 6. Create interaction recipes ##
 fixed_effects_interaction_recipes_r2 = [
     nothing, nothing, nothing, nothing, nothing, # Terms 1-5 are basis terms
-    InteractionRecipe([2, 4], MultiplicationOperator()),       # Term 6: Age_first (2) * Treatment_Medium (4)
-    InteractionRecipe([2, 5], MultiplicationOperator())        # Term 7: Age_first (2) * Treatment_High (5)
+    BRM.InteractionRecipe([2, 4], BRM.MultiplicationOperator()),       # Term 6: Age_first (2) * Treatment_Medium (4)
+    BRM.InteractionRecipe([2, 5], BRM.MultiplicationOperator())        # Term 7: Age_first (2) * Treatment_High (5)
 ]
 
 random_effects_interaction_recipes_r2 = DimArray([
         # Factor 1: Subject (3 terms, no interactions)
-        Union{Nothing,InteractionRecipe{MultiplicationOperator}}[nothing for _ in 1:3],
+        Union{Nothing,BRM.InteractionRecipe{BRM.MultiplicationOperator}}[nothing for _ in 1:3],
 
         # Factor 2: Experimenter (2 terms, no interactions)
-        Union{Nothing,InteractionRecipe{MultiplicationOperator}}[nothing for _ in 1:2]
+        Union{Nothing,BRM.InteractionRecipe{BRM.MultiplicationOperator}}[nothing for _ in 1:2]
     ], random_effect_factor_labels)
 
 ## 7. Create info for each term ##
 terms_info_r2 = (
     
     #Intercept info
-    Intercept=TermInfo(
-        basis_expansion_type=IdentityExpansion(),
+    Intercept=BRM.TermInfo(
+        basis_expansion_type=BRM.IdentityExpansion(),
         basis_matrix_indices=[1],
         fixed_effects_indices=[1],
         random_effects_indices=[(1, [1]), (2, [1])],
         level_assignments_idx=0,
-        dependent_interaction_indices=DependentInteractionIndices(Int[], Tuple{Int,Int}[])), 
+        dependent_interaction_indices=BRM.DependentInteractionIndices(Int[], Tuple{Int,Int}[])), 
         
     #Age info    
-    Age=TermInfo(
-        basis_expansion_type=PolynomialExpansion(2),
+    Age=BRM.TermInfo(
+        basis_expansion_type=BRM.PolynomialExpansion(2),
         basis_matrix_indices=[2, 3],
         fixed_effects_indices=[2, 3],
         random_effects_indices=[(2, [2, 0])],
         level_assignments_idx=0,
-        dependent_interaction_indices=DependentInteractionIndices([6, 7], Tuple{Int,Int}[])
+        dependent_interaction_indices=BRM.DependentInteractionIndices([6, 7], Tuple{Int,Int}[])
     ), 
     
     #Treatment info
-    Treatment=TermInfo(
-        basis_expansion_type=DummyCodeExpansion(),
+    Treatment=BRM.TermInfo(
+        basis_expansion_type=BRM.DummyCodeExpansion(),
         basis_matrix_indices=[4, 5],
         fixed_effects_indices=[4, 5],
         random_effects_indices=[(1, [2, 3])],
         level_assignments_idx=0,
-        dependent_interaction_indices=DependentInteractionIndices([6, 7], Tuple{Int,Int}[])
+        dependent_interaction_indices=BRM.DependentInteractionIndices([6, 7], Tuple{Int,Int}[])
     ),
 
     # Subject info
-    Subject=TermInfo(
-        basis_expansion_type=DummyCodeExpansion(),
+    Subject=BRM.TermInfo(
+        basis_expansion_type=BRM.DummyCodeExpansion(),
         basis_matrix_indices=Int[],
         fixed_effects_indices=Int[],
         random_effects_indices=Tuple{Int,Vector{Int}}[],
         level_assignments_idx=1,
-        dependent_interaction_indices=DependentInteractionIndices(Int[], Tuple{Int,Int}[])
+        dependent_interaction_indices=BRM.DependentInteractionIndices(Int[], Tuple{Int,Int}[])
     ),
 
     # Experimenter info
-    Experimenter=TermInfo(
-        basis_expansion_type=DummyCodeExpansion(),
+    Experimenter=BRM.TermInfo(
+        basis_expansion_type=BRM.DummyCodeExpansion(),
         basis_matrix_indices=Int[],
         fixed_effects_indices=Int[],
         random_effects_indices=Tuple{Int,Vector{Int}}[],
         level_assignments_idx=2,
-        dependent_interaction_indices=DependentInteractionIndices(Int[], Tuple{Int,Int}[])
+        dependent_interaction_indices=BRM.DependentInteractionIndices(Int[], Tuple{Int,Int}[])
     )
 )
 
 ## 8. Create container for marking interaction effects for being updated ##
-interaction_udpate_markers_r2 = InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r2)])
+interaction_udpate_markers_r2 = BRM.InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r2)])
 
 ## 9. Instantiate predictors ##
-predictors_r2 = RegressionPredictors(
+predictors_r2 = BRM.RegressionPredictors(
     basis_matrix_r2,
     fixed_effects_design_matrix_r2,
     random_effect_design_matrices_r2,
@@ -724,7 +728,7 @@ random_effect_design_matrices_r3 = DimArray([
         fixed_effects_design_matrix_r3[:, At([:Intercept, :Age, :BMI, :Age_x_BMI])],
 
         # Factor 2: Experimenter (No terms)
-        DimArray(Matrix{Float64}(undef, n_outcomes_r3, 0), (outcome_labels[At(:performance_sd)], RandomEffectTermDim(Symbol[])))
+        DimArray(Matrix{Float64}(undef, n_outcomes_r3, 0), (outcome_labels[At(:performance_sd)], BRM.RandomEffectTermDim(Symbol[])))
         
 ], random_effect_factor_labels)
 
@@ -734,77 +738,77 @@ random_effect_level_assignments_r3 = DimArray(hcat(
 
         #Variable 2: Subject (4 levels)
         repeat([1, 2, 3, 4], inner=3),  # [1,1,1, 2,2,2, 3,3,3, 4,4,4]
-    ), (outcome_labels[At(:performance_sd)], CategoricalVariableDim([:Subject])))
+    ), (outcome_labels[At(:performance_sd)], BRM.CategoricalVariableDim([:Subject])))
 
 
 
 ## 6. Create interaction recipes ##
 fixed_effects_interaction_recipes_r3 = [nothing, nothing, nothing,
-    InteractionRecipe([2, 3], MultiplicationOperator()), # 4: Age (2) * BMI (3)
-    InteractionRecipe([2, 3], MaxOperator())             # 5: max(Age (2), BMI (3))
+    BRM.InteractionRecipe([2, 3], BRM.MultiplicationOperator()), # 4: Age (2) * BMI (3)
+    BRM.InteractionRecipe([2, 3], BRM.MaxOperator())             # 5: max(Age (2), BMI (3))
 ]
 
 random_effects_interaction_recipes_r3 = DimArray([
     # Factor 1: Subject (4 terms, 3 main effects and 1 interaction)
     [nothing, nothing, nothing,
-        InteractionRecipe([2, 3], MultiplicationOperator()), # 4: Age (2) * BMI (3)
+        BRM.InteractionRecipe([2, 3], BRM.MultiplicationOperator()), # 4: Age (2) * BMI (3)
     ],
 
     # Factor 2: Experimenter (No terms)
-    Vector{Union{Nothing,InteractionRecipe{MultiplicationOperator}}}()
+    Vector{Union{Nothing,BRM.InteractionRecipe{BRM.MultiplicationOperator}}}()
 ], random_effect_factor_labels)
 
 ## 7. Create info for each term ##
 terms_info_r3 = (
     
     #Intercept info
-    Intercept=TermInfo(
-        basis_expansion_type=IdentityExpansion(),
+    Intercept=BRM.TermInfo(
+        basis_expansion_type=BRM.IdentityExpansion(),
         basis_matrix_indices=[1],
         fixed_effects_indices=[1],
         random_effects_indices=[(1, [1])],
         level_assignments_idx=0,
-        dependent_interaction_indices=DependentInteractionIndices(Int[], Tuple{Int,Int}[])
+        dependent_interaction_indices=BRM.DependentInteractionIndices(Int[], Tuple{Int,Int}[])
     ), 
     
     #Age info
-    Age=TermInfo(
-        basis_expansion_type=IdentityExpansion(),
+    Age=BRM.TermInfo(
+        basis_expansion_type=BRM.IdentityExpansion(),
         basis_matrix_indices=[2],
         fixed_effects_indices=[2],
         random_effects_indices=[(1, [2])],
         level_assignments_idx=0,
         # Age is part of the interaction in the fixed effects design matrix (col 4) and in the Subject random effects design matrix (Factor 1, col 4)
-        dependent_interaction_indices=DependentInteractionIndices([4, 5], [(1, 4)])
+        dependent_interaction_indices=BRM.DependentInteractionIndices([4, 5], [(1, 4)])
     ), 
     
     #BMI info
-    BMI=TermInfo(
-        basis_expansion_type=IdentityExpansion(),
+    BMI=BRM.TermInfo(
+        basis_expansion_type=BRM.IdentityExpansion(),
         basis_matrix_indices=[3],
         fixed_effects_indices=[3],
         random_effects_indices=[(1, [3])],
         level_assignments_idx=0,
         # BMI is part of the interaction in Fixed (col 4) and Subject Random (Factor 1, col 4)
-        dependent_interaction_indices=DependentInteractionIndices([4, 5], [(1, 4)])
+        dependent_interaction_indices=BRM.DependentInteractionIndices([4, 5], [(1, 4)])
     ), 
     
     #Subject info
-    Subject=TermInfo(
-        basis_expansion_type=DummyCodeExpansion(),
+    Subject=BRM.TermInfo(
+        basis_expansion_type=BRM.DummyCodeExpansion(),
         basis_matrix_indices=Int[],
         fixed_effects_indices=Int[],
         random_effects_indices=Tuple{Int,Vector{Int}}[],
         level_assignments_idx=1,
-        dependent_interaction_indices=DependentInteractionIndices(Int[], Tuple{Int,Int}[])
+        dependent_interaction_indices=BRM.DependentInteractionIndices(Int[], Tuple{Int,Int}[])
     ),
 )
 
 ## 8. Create container for marking interaction effects for being updated ##
-interaction_udpate_markers_r3 = InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r3)])
+interaction_udpate_markers_r3 = BRM.InteractionUpdateMarkers(BitSet(), [BitSet() for _ in 1:length(random_effect_design_matrices_r3)])
 
 ## 9. Instantiate predictors ##
-predictors_r3 = RegressionPredictors(
+predictors_r3 = BRM.RegressionPredictors(
     basis_matrix_r3,
     fixed_effects_design_matrix_r3,
     random_effect_design_matrices_r3,
@@ -825,17 +829,17 @@ predictors = DimArray([predictors_r1, predictors_r2, predictors_r3], regression_
 operations = (
     
     #Operation 1: generate the underlying BMI with a simple linear combination
-    BMI = RegressionOperation(
-        LinearCombination(),
-        UpdatePredictors(:BMI,[:performance_sd])
+    BMI = BRM.RegressionOperation(
+        BRM.LinearCombination(),
+        BRM.UpdatePredictors(:BMI,[:performance_sd])
         ),
 
     #Operation 2: get the likelihood of the measured BMI given the latent BMI
-    BMI_measurement_error_likelihood = RegressionOperation(
-        DistributionLikelihood(
+    BMI_measurement_error_likelihood = BRM.RegressionOperation(
+        BRM.DistributionLikelihood(
             dist = Normal,
             dist_args = (
-                μ = ExtractPredictors(:performance_sd, [:BMI]),
+                μ = BRM.ExtractPredictors(:performance_sd, [:BMI]),
                 σ = 1,
                 ),
             observations = rand(Normal(), n_outcomes_r1) #These are the measured BMI_measured
@@ -843,24 +847,24 @@ operations = (
     ),
 
     #Operation 3: Get the predicted mean for the performance with a linear combination
-    performance_mean = RegressionOperation(
-        LinearCombination(),
+    performance_mean = BRM.RegressionOperation(
+        BRM.LinearCombination(),
         store_outcome = true
     ),
 
     #Operation 4: Get the predicted SD for the performance with a linear combination
-    performance_sd = RegressionOperation(
-        LinearCombination(),
+    performance_sd = BRM.RegressionOperation(
+        BRM.LinearCombination(),
         store_outcome = true
     ),
 
     #Operation 5: evaluate the measured performance against a Gaussian likelihood
-    performance_likelihood = RegressionOperation(
-        DistributionLikelihood(
+    performance_likelihood = BRM.RegressionOperation(
+        BRM.DistributionLikelihood(
             dist = Normal,
             dist_args = (
-                μ = ExtractOutcome(:performance_mean),
-                σ = ExtractOutcome(:performance_sd, exp)
+                μ = BRM.ExtractOutcome(:performance_mean),
+                σ = BRM.ExtractOutcome(:performance_sd, exp)
                 ),
             observations = ones(n_outcomes_r2) #These are the measured performances
         ),
@@ -879,20 +883,20 @@ coefficients = rand(priors)
 total_logprob = logpdf(priors, coefficients)
 
 ## 3. Test extraction of coefficients ##
-fixed_effects = get_fixed_effects(coefficients)
-random_effects = get_random_effects(coefficients)
+fixed_effects = BRM.get_fixed_effects(coefficients)
+random_effects = BRM.get_random_effects(coefficients)
 
 ## 4. Test updating predictors ##
-update_predictors!(predictors, (:Age, :Treatment), (randn(12), rand(1:3, 12)), :performance_mean)
+BRM.update_predictors!(predictors, (:Age, :Treatment), (randn(12), rand(1:3, 12)), :performance_mean)
 
 ## 5. Test getter function for predictor basis term values ##
-get_predictor_values(predictors, ExtractPredictors(:performance_mean, [:Age_first, :Age_second], exp))
+BRM.get_predictor_values(predictors, BRM.ExtractPredictors(:performance_mean, [:Age_first, :Age_second], exp))
 
 ## 6. Test linear_combination ##
-outcomes = linear_combination(predictors, coefficients)
+outcomes = BRM.linear_combination(predictors, coefficients)
 
 ## 7. Test Turing regression model ##
-model = regression_model(predictors, priors, operations)
+model = BRM.regression_model(predictors, priors, operations)
 chain = sample(model, Prior(), 1000, chain_type=VNChain)
 
-chain[Symbol("performance_likelihood.observations")]
+chain[@varname(coefficients.random_effects)]

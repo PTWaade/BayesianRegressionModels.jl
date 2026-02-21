@@ -20,7 +20,8 @@ function linear_combination(;
     outcomes = parent(fixed_effect_design_matrix) * parent(fixed_effects)
 
     #Go through each factor
-    for f in labels.random_effect_factors
+    random_effect_factors = dims(random_effect_design_matrices, RandomEffectFactorDim)
+    for f in random_effect_factors
 
         # 3. Extract labels for of random effect terms for this factor f
         random_effect_term_labels_f = random_effect_term_labels[At(f)]
