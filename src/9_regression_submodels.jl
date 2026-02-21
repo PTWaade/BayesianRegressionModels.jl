@@ -1,7 +1,10 @@
-##############################
-### PREDICTOR UPDATE TYPES ###
-##############################
-## 1. Abstract type for specifying how to update the RegressionPredictors after an operation ##
+"""
+    abstract type AbstractPredictorUpdate
+    
+Abstract type for specifying how to update the RegressionPredictors after an operation.
+
+Subtypes of this include ...
+"""
 abstract type AbstractPredictorUpdate end
 
 ## 2. Concrete type and dispatch for not updating the RegressionPredictors ##
