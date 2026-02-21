@@ -1,6 +1,6 @@
 name = "BayesianRegressionModels"
 uuid = "cdd3e328-398d-47a6-a87b-6047aaf4b4bc"
-authors = ["Penelope Yong <penelopeysm@gmail.com>"]
+authors = ["Penelope Yong <penelopeysm@gmail.com>, Peter Thestrup Waade <peter@waade.net>"]
 version = "0.1.0"
 
 [deps]
