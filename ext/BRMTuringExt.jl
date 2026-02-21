@@ -6,11 +6,10 @@ using FlexiChains
 
 ## 2. Submodel for evaluating the likelihood of observations, parameterising a distribution with predictions, a prior, or pre-specified values ##
 @model function regression_submodel(
-    likelihood_info::Tlikelihood,
-    predictions::Tpredictions,
-    predictors::Tpredictors,
-) where {Tlikelihood<:BRM.DistributionLikelihood,Tpredictions<:NamedTuple,Tpredictors<:AbstractVector{<:BRM.RegressionPredictors}}
-
+    likelihood_info::BRM.DistributionLikelihood,
+    predictions::NamedTuple,
+    predictors::BRM.RegressionPredictors
+)
     ## 1. Extract observations ##
     #If the observations are a pre-specified array
     if likelihood_info.observations isa AbstractArray
