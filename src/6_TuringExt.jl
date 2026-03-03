@@ -115,7 +115,7 @@ end
         ## 4. For applying a Turing submodel as likelihood or to generate values ##
         elseif operation isa AbstractRegressionSubmodel
 
-            #Apply the Turing submodel (likelihood and/or generation values)
+            #Apply the Turing submodel (likelihood and/or generation of values)
             generated_values ~ to_submodel(prefix(regression_submodel(operation, outcomes, predictors), operation_label), false)
 
         end

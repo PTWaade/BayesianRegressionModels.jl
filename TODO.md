@@ -7,7 +7,7 @@
    - Ensure that DualNumbers can be used throughout
 - Planned features?
   - Ordinal predictors (more complicated - similar to monotonic effects in brms. Seems doable, but needs to be able to parameterise basis term expansions)
-  - Orginal outcomes (just a different likelihood)
+  - Ordinal outcomes (just a different likelihood)
   - Decompositions of the predictors (QR decomposition, Orthogonal polar decomposition)
   - Allow sharing parameters across regressions (e.g., fixed effects being identical in multiple regressions)
 - Optimisation
