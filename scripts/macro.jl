@@ -20,3 +20,18 @@ end
         )
     end
 end
+
+# With a single dataframe, the model definition could look as follows (which would lower to the "obvious" syntax):
+model = @brm begin 
+    BMI ~ Normal(BMI_measured, 1)
+    Age_first, Age_second = ploynomial_expand(Age; order=2)
+    performance_mean ~ 1 + Age_first * Treatment + Age_second + (1 + Treatment | Subject) + (1 + Age_first | Experimenter)
+    log(performance_sd) ~ 1 + AGE * BMI + max(Age, BMI) + (1 + Age * BMI | Subject)
+    Performance ~ Normal(performance_mean, performance_sd)
+    @defaults begin 
+        gr(Subject, by=ClinicalGroup,
+            Block1=>[Treatment, Age:BMI],
+            Block2=>[Age, BMI]
+        )
+    end
+end 
