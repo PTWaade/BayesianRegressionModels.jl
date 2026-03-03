@@ -29,7 +29,9 @@
   - Make Turing submodel alternative to rand and logpdf (and benchmark)
   - Make constructor for combining multivariate distributions so that they sample vectors
 - Fixes
-  - Add comments with canonical mathematical notation   
+  - Add comments with canonical mathematical notation
+  - Change comments to docstrings throughout
+  - Remove where{} from function type signatures throughout
 - Preconstructed functionalities
   - Spike-and-slab prior distribtution 
   - Horseshoe prior distribution 
