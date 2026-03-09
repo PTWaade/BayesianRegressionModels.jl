@@ -31,6 +31,7 @@ jobs:
           julia --project=scripts -e '
             import Pkg
             Pkg.develop(Pkg.PackageSpec(path="."))
+            Pkg.develop(Pkg.PackageSpec(path="scripts/CatalogServer"))
             Pkg.add(Pkg.PackageSpec(url="https://github.com/penelopeysm/FlexiChains.jl"))
             Pkg.instantiate()
           '
