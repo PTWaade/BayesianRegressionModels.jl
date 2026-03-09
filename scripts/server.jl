@@ -27,6 +27,7 @@
 # refactor lands.
 
 using Markdown
+using YAML
 using Oxygen: @get, html, serve
 
 include(joinpath(@__DIR__, "examples", "all.jl"))
@@ -34,52 +35,47 @@ include(joinpath(@__DIR__, "examples", "all.jl"))
 # ── Source metadata ───────────────────────────────────────────────────────────
 
 const SOURCE_META = Dict(
-    :bambi          => (label="Bambi model gallery",                          color="#f59e0b"),
-    :brms           => (label="brms vignettes (Bürkner)",                     color="#3b82f6"),
-    :mcelreath      => (label="Statistical Rethinking 2e (Kurz / McElreath)", color="#10b981"),
-    :kruschke       => (label="DBDA2 (Kurz / Kruschke)",                      color="#8b5cf6"),
-    :burkner_papers => (label="Bürkner JSS 2017 + R Journal 2018",            color="#06b6d4"),
-    :vasishth       => (label="Bayesian Data Analysis for Cognitive Science",  color="#ef4444"),
+    :bambi          => (label="Bambi model gallery",                              color="#f59e0b"),
+    :brms           => (label="brms vignettes (Bürkner)",                         color="#3b82f6"),
+    :mcelreath      => (label="Statistical Rethinking 2e (Kurz / McElreath)",     color="#10b981"),
+    :kruschke       => (label="DBDA2 (Kurz / Kruschke)",                          color="#8b5cf6"),
+    :burkner_papers => (label="Bürkner JSS 2017 + R Journal 2018",                color="#06b6d4"),
+    :vasishth       => (label="Bayesian Data Analysis for Cognitive Science",      color="#ef4444"),
+    :action_models  => (label="ActionModels.jl (ComputationalPsychiatry)",         color="#f97316"),
+    :epidist        => (label="epidist (Epinowcast Community)",                    color="#ec4899"),
+    :epinowcast     => (label="epinowcast + baselinenowcast",                      color="#14b8a6"),
+    :rstanarm       => (label="rstanarm vignettes",                                color="#6366f1"),
+    :bmm            => (label="bmm — Bayesian Measurement Models",                 color="#d946ef"),
+    :flocker        => (label="flocker — Bayesian Occupancy Models",               color="#84cc16"),
+    :mvgam           => (label="mvgam — Multivariate Dynamic GAMs",                 color="#0ea5e9"),
+    :inla            => (label="R-INLA — INLA with f() random effects",             color="#fb923c"),
+    :mcmcglmm        => (label="MCMCglmm — MCMC GLMMs with animal models",          color="#e879f9"),
+    :glmmtmb         => (label="glmmTMB — GLMMs with ZI/hurdle and dispersion",     color="#34d399"),
+    :lme4            => (label="lme4 — Linear/Generalised Mixed Models (R)",        color="#f43f5e"),
+    :mixed_models_jl => (label="MixedModels.jl — Mixed Models (Julia)",             color="#a855f7"),
+    :glm_jl          => (label="GLM.jl — Generalised Linear Models (Julia)",        color="#22c55e"),
 )
+
+# Fall back to a neutral colour for any source not listed above (e.g. newly added ones).
+_source_meta(src::Symbol) = get(SOURCE_META, src,
+    (label=string(src), color="#6b7280"))
 
 # ── YAML / docstring helpers ──────────────────────────────────────────────────
 
 """
-Parse a small subset of YAML: boolean and string scalars, and string lists.
-Intended for the metadata block at the top of example docstrings.
+Parse the YAML metadata block at the top of an example docstring.
+Uses YAML.jl for full YAML support (multiline scalars, booleans, lists, etc.).
+Returns a `Dict{String,Any}` with string keys.
 """
-function parse_yaml_simple(yaml_str::AbstractString)
-    meta = Dict{String, Any}()
-    lines = split(yaml_str, "\n")
-    i = 1
-    while i <= length(lines)
-        line = lines[i]
-        m = match(r"^(\w+)\s*:\s*(.*)", line)
-        if m !== nothing
-            k, v = m[1], strip(m[2])
-            if isempty(v)
-                # Expect a YAML list on the following indented lines
-                items = String[]
-                i += 1
-                while i <= length(lines)
-                    lm = match(r"^\s+-\s+(.*)", lines[i])
-                    lm === nothing && break
-                    push!(items, strip(lm[1]))
-                    i += 1
-                end
-                meta[k] = items
-                continue
-            elseif v == "true"
-                meta[k] = true
-            elseif v == "false"
-                meta[k] = false
-            else
-                meta[k] = strip(v, ['"', '\''])
-            end
-        end
-        i += 1
+function parse_yaml(yaml_str::AbstractString)::Dict{String,Any}
+    isempty(strip(yaml_str)) && return Dict{String,Any}()
+    raw = try
+        YAML.load(yaml_str)
+    catch
+        return Dict{String,Any}()
     end
-    return meta
+    raw isa Dict || return Dict{String,Any}()
+    return Dict{String,Any}(string(k) => v for (k, v) in raw)
 end
 
 # Retrieve the raw (unparsed) docstring text for examples(::Val{key}) in the
@@ -122,7 +118,7 @@ function split_docstring(source::Symbol, key::Symbol)
         if m !== nothing
             yaml_text = raw[1:m.offset-1]
             desc_text = strip(raw[m.offset+length(m.match):end])
-            return parse_yaml_simple(yaml_text), Markdown.parse(desc_text)
+            return parse_yaml(yaml_text), Markdown.parse(desc_text)
         end
         # No separator — return the full doc with empty metadata
         return Dict{String,Any}(), describe(source, key)
@@ -133,7 +129,7 @@ function split_docstring(source::Symbol, key::Symbol)
     hr_idx === nothing && return Dict{String,Any}(), doc
     yaml_md = Markdown.MD(doc.content[1:hr_idx-1])
     desc_md = Markdown.MD(doc.content[hr_idx+1:end])
-    return parse_yaml_simple(sprint(show, MIME("text/plain"), yaml_md)), desc_md
+    return parse_yaml(sprint(show, MIME("text/plain"), yaml_md)), desc_md
 end
 
 # Pre-compute metadata for every catalog entry once at startup.
@@ -149,11 +145,15 @@ end
 # ── HTML generation ───────────────────────────────────────────────────────────
 
 esc_html(s) = replace(string(s), "&"=>"&amp;", "<"=>"&lt;", ">"=>"&gt;", "\""=>"&quot;")
+# For use in HTML attribute values: also encodes newlines
+esc_attr(s) = replace(string(s), "&"=>"&amp;", "<"=>"&lt;", ">"=>"&gt;", "\""=>"&quot;", "\n"=>"&#10;")
 
 # ── Parseable / sampleable predicates ────────────────────────────────────────
 # Replace these with real implementations once available.
 is_parseable(source::Symbol, key::Symbol, formula::AbstractString, dataset::AbstractString) = false
 is_sampleable(source::Symbol, key::Symbol, formula::AbstractString, dataset::AbstractString) = false
+is_hidden(source::Symbol, key::Symbol) =
+    get(entry_meta(source, key)[1], "hidden", false) === true
 
 function render_table_row(source::Symbol, key::Symbol)
     meta, desc = entry_meta(source, key)
@@ -161,11 +161,12 @@ function render_table_row(source::Symbol, key::Symbol)
     example    = get(meta, "example", "")
     dataset    = get(meta, "dataset", "")
     formula    = get(meta, "formula", "")
+    family     = get(meta, "family", "gaussian")
     chapter    = get(meta, "chapter", "")
     source_url = get(meta, "source", "")
     parseable  = is_parseable(source, key, formula, dataset)
     sampleable = is_sampleable(source, key, formula, dataset)
-    color      = SOURCE_META[source].color
+    color      = _source_meta(source).color
     row_id     = "tr-$(source)-$(key)"
 
     verified_cell = verified ?
@@ -181,9 +182,11 @@ function render_table_row(source::Symbol, key::Symbol)
     else
         ""
     end
+    family_tag = !isempty(family) ?
+        """<span class="badge-family" title="Family">$(esc_html(family))</span>""" : ""
     detail_row = """<tr id="$(row_id)-detail" class="detail-row" style="display:none">
       <td colspan="5"><div class="row-detail-inner">
-        <div class="row-detail-meta">$(chapter_tag)$(source_tag)
+        <div class="row-detail-meta">$(chapter_tag)$(source_tag)$(family_tag)
           <span class="badge-flag $(parseable  ? "badge-flag-on" : "badge-flag-off")" title="$(parseable  ? "Parseable"     : "Not parseable")">$(parseable  ? "&#10003;&nbsp;" : "")parseable</span>
           <span class="badge-flag $(sampleable ? "badge-flag-on" : "badge-flag-off")" title="$(sampleable ? "Sampleable"    : "Not sampleable")">$(sampleable ? "&#10003;&nbsp;" : "")sampleable</span>
         </div>
@@ -195,16 +198,17 @@ function render_table_row(source::Symbol, key::Symbol)
                   onclick="toggleDetail('$(row_id)')"
                   data-source="$(source)"
                   data-verified="$(verified ? "true" : "false")"
-                  data-example="$(esc_html(example))"
-                  data-dataset="$(esc_html(dataset))"
-                  data-formula="$(esc_html(formula))"
+                  data-example="$(esc_attr(example))"
+                  data-dataset="$(esc_attr(dataset))"
+                  data-formula="$(esc_attr(formula))"
+                  data-family="$(esc_attr(family))"
                   data-parseable="$(parseable ? "true" : "false")"
                   data-sampleable="$(sampleable ? "true" : "false")">
       $(verified_cell)
       <td><code style="color:$(color)">:$(source)</code></td>
       <td>$(esc_html(example))</td>
       <td>$(esc_html(dataset))</td>
-      <td class="formula-cell"><code>$(esc_html(formula))</code></td>
+      <td class="formula-cell"><div class="formula-flex"><div class="formula-code-wrap"><code style="user-select:all">$(esc_html(formula))</code></div><button class="copy-btn" onclick="event.stopPropagation();copyFormulaBtn(this)" title="Copy formula">&#x2398;</button></div></td>
     </tr>
     $(detail_row)"""
 end
@@ -218,8 +222,9 @@ function render_card(source::Symbol, key::Symbol)
     example    = get(meta, "example", "")
     dataset    = get(meta, "dataset", "")
     formula    = get(meta, "formula", "")
+    family     = get(meta, "family", "gaussian")
     body       = Markdown.html(desc)
-    color      = SOURCE_META[source].color
+    color      = _source_meta(source).color
 
     # When the example group heading already shows the prefix (e.g. "Custom Families"),
     # the card header only needs to show the variant part after " — ".
@@ -245,9 +250,10 @@ function render_card(source::Symbol, key::Symbol)
         ""
     end
     formula_row = !isempty(formula) ?
-        """<div class="card-formula"><code>$(esc_html(formula))</code></div>""" : ""
+        """<div class="card-formula"><code style="user-select:all">$(esc_html(formula))</code><button class="copy-btn" onclick="copyFormulaBtn(this)" title="Copy formula">&#x2398;</button></div>""" : ""
     dataset_tag = !isempty(dataset) ?
         """<span class="tag-dataset" title="Dataset">$(esc_html(dataset))</span>""" : ""
+    family_badge = """<span class="badge-family" title="Family">$(esc_html(family))</span>"""
     flag_badge(label, val) = val ?
         """<span class="badge-flag badge-flag-on" title="$(label)">&#10003;&nbsp;$(label)</span>""" :
         """<span class="badge-flag badge-flag-off" title="Not $(label)">$(label)</span>"""
@@ -257,14 +263,17 @@ function render_card(source::Symbol, key::Symbol)
         <article class="$(card_class)" id="$(source)-$(key)"
                  data-source="$(source)"
                  data-verified="$(verified ? "true" : "false")"
-                 data-example="$(esc_html(example))"
-                 data-dataset="$(esc_html(dataset))"
-                 data-formula="$(esc_html(formula))">
+                 data-example="$(esc_attr(example))"
+                 data-dataset="$(esc_attr(dataset))"
+                 data-formula="$(esc_attr(formula))"
+                 data-family="$(esc_attr(family))"
+                 data-parseable="$(parseable ? "true" : "false")"
+                 data-sampleable="$(sampleable ? "true" : "false")">
           <div class="card-header" style="border-left:4px solid $(color)">
             <span class="card-key">:$(key)</span>$(verified_badge)$(subtitle_span)$(chapter_span)$(source_link)
           </div>$(formula_row)
           <div class="card-body">$(body)</div>
-          <div class="card-footer">$(dataset_tag)$(flag_badge("parseable", parseable))$(flag_badge("sampleable", sampleable))</div>
+          <div class="card-footer">$(dataset_tag)$(family_badge)$(flag_badge("parseable", parseable))$(flag_badge("sampleable", sampleable))</div>
         </article>"""
 end
 
@@ -295,25 +304,29 @@ function _example_heading(ex::String, entries)
 end
 
 function render_page()
-    sources = unique(e.source for e in CATALOG)
-
-    # Pre-warm cache for all entries
+    # Pre-warm cache for all entries (including hidden, so is_hidden() works)
     for e in CATALOG
         entry_meta(e.source, e.key)
     end
 
-    n_verified = count(CATALOG) do e
+    visible = filter(e -> !is_hidden(e.source, e.key), CATALOG)
+
+    n_verified = count(visible) do e
         get(_ENTRY_CACHE[(e.source, e.key)][1], "verified", false) === true
     end
 
     nav_items = join([
-        """<button class="nav-btn" data-source="$(src)" style="border-bottom:3px solid $(SOURCE_META[src].color)" _="on click call handleNavClick(me)">:$(src)</button>"""
-        for src in sources], "\n        ")
+        """<button class="nav-btn" data-source="$(src)" style="border-bottom:3px solid $(_source_meta(src).color)" _="on click call handleNavClick(me)">:$(src)</button>"""
+        for src in unique(e.source for e in visible)], "\n        ")
 
     sections = join([begin
-        src_meta = SOURCE_META[src]
-        entries  = filter(e -> e.source == src, CATALOG)
-        groups   = _group_by_example(entries)
+        src_meta = _source_meta(src)
+        entries  = filter(e -> e.source == src, visible)
+        # Sort groups: verified-containing groups first, then alphabetically by example key
+        groups   = sort(_group_by_example(entries), by = ((ex, grp),) -> begin
+            has_v = any(e -> get(_ENTRY_CACHE[(e.source, e.key)][1], "verified", false) === true, grp)
+            (has_v ? 0 : 1, ex)
+        end)
 
         groups_html = join([begin
             grp_entries = sort(grp_entries,
@@ -341,9 +354,9 @@ function render_page()
           </h2>
           $(groups_html)
         </section>"""
-    end for src in sources])
+    end for src in unique(e.source for e in visible)])
 
-    table_rows = join(render_table_row(e.source, e.key) for e in CATALOG)
+    table_rows = join(render_table_row(e.source, e.key) for e in visible)
 
     return """<!DOCTYPE html>
 <html lang="en">
@@ -355,14 +368,18 @@ function render_page()
   <script type="text/hyperscript">
     def filterCatalog()
       set q to #search.value.toLowerCase()
-      set src to #active-source.value
-      set verifiedOnly to #verified-only.checked
+      set src           to #active-source.value
+      set verifiedOnly  to #verified-only.checked
+      set parseableOnly to #parseable-only.checked
+      set sampleableOnly to #sampleable-only.checked
       for card in <article.card/>
         set text to card.textContent.toLowerCase()
-        set srcOk      to src is '' or card.dataset.source is src
-        set textOk     to q is '' or text contains q
-        set verifiedOk to not verifiedOnly or card.dataset.verified is 'true'
-        if srcOk and textOk and verifiedOk
+        set srcOk       to src is '' or card.dataset.source is src
+        set textOk      to q is '' or text contains q
+        set verifiedOk  to not verifiedOnly  or card.dataset.verified  is 'true'
+        set parseableOk to not parseableOnly or card.dataset.parseable is 'true'
+        set sampleableOk to not sampleableOnly or card.dataset.sampleable is 'true'
+        if srcOk and textOk and verifiedOk and parseableOk and sampleableOk
           show card
         else
           hide card
@@ -391,10 +408,12 @@ function render_page()
       -- filter table rows
       for row in <#catalog-tbody tr.catalog-row/>
         set text to row.textContent.toLowerCase()
-        set srcOk      to src is '' or row.dataset.source is src
-        set textOk     to q is '' or text contains q
-        set verifiedOk to not verifiedOnly or row.dataset.verified is 'true'
-        if srcOk and textOk and verifiedOk
+        set srcOk       to src is '' or row.dataset.source is src
+        set textOk      to q is '' or text contains q
+        set verifiedOk  to not verifiedOnly  or row.dataset.verified  is 'true'
+        set parseableOk to not parseableOnly or row.dataset.parseable is 'true'
+        set sampleableOk to not sampleableOnly or row.dataset.sampleable is 'true'
+        if srcOk and textOk and verifiedOk and parseableOk and sampleableOk
           show row
         else
           hide row
@@ -419,9 +438,15 @@ function render_page()
     *{box-sizing:border-box}
     body{font-family:system-ui,sans-serif;font-size:15px;line-height:1.6;
          color:#1a1a1a;background:#f8f9fa;margin:0}
-    header{background:#1a1a2e;color:#fff;padding:1.5rem 2rem}
+    header{background:#1a1a2e;color:#fff;padding:1.5rem 2rem;
+           display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
     header h1{margin:0;font-size:1.5rem}
     header p{margin:.25rem 0 0;opacity:.7;font-size:.9rem}
+    .header-text{flex:1;min-width:0}
+    .github-link{color:#fff;opacity:.75;text-decoration:none;font-size:.85rem;
+                 border:1px solid rgba(255,255,255,.3);border-radius:6px;
+                 padding:.3rem .7rem;white-space:nowrap;flex-shrink:0}
+    .github-link:hover{opacity:1;background:rgba(255,255,255,.1)}
     nav{position:sticky;top:0;z-index:100;background:#fff;
         border-bottom:1px solid #e0e0e0;padding:.6rem 2rem;
         display:flex;gap:1rem;flex-wrap:wrap;align-items:center}
@@ -431,13 +456,13 @@ function render_page()
              transition:color .15s,background .15s}
     .nav-btn:hover{color:#111;background:#f0f0f0}
     .nav-btn.active{color:#111;background:#f0f0f0}
-    .nav-verified{display:flex;align-items:center;gap:.35rem;
-                  font-size:.83rem;color:#555;cursor:pointer;
-                  padding:.15rem .5rem;border-radius:4px;
-                  border:1px solid #d0d0d0;background:#fafafa;
-                  white-space:nowrap;user-select:none}
-    .nav-verified:hover{background:#f0f0f0}
-    .nav-verified input{cursor:pointer;accent-color:#16a34a}
+    .nav-filter{display:flex;align-items:center;gap:.35rem;
+                font-size:.83rem;color:#555;cursor:pointer;
+                padding:.15rem .5rem;border-radius:4px;
+                border:1px solid #d0d0d0;background:#fafafa;
+                white-space:nowrap;user-select:none}
+    .nav-filter:hover{background:#f0f0f0}
+    .nav-filter input{cursor:pointer;accent-color:#16a34a}
     #search{margin-left:auto;padding:.3rem .65rem;border:1px solid #d0d0d0;
             border-radius:6px;font-size:.85rem;width:210px;outline:none}
     #search:focus{border-color:#888;box-shadow:0 0 0 2px rgba(0,0,0,.06)}
@@ -481,10 +506,18 @@ function render_page()
                 padding:.05rem .4rem;white-space:nowrap}
     .badge-flag-on{color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe}
     .badge-flag-off{color:#d1d5db;background:#f9fafb;border:1px solid #e5e7eb}
+    .badge-family{font-size:.68rem;border-radius:4px;padding:.05rem .4rem;
+                  white-space:nowrap;color:#7c3aed;background:#f5f3ff;
+                  border:1px solid #ddd6fe}
     .card-formula{padding:.5rem .9rem;background:#f3f4f6;
-                  border-bottom:1px solid #e5e7eb;overflow-x:auto}
+                  border-bottom:1px solid #e5e7eb;overflow-x:auto;
+                  display:flex;align-items:flex-start;gap:.4rem}
     .card-formula code{font-family:monospace;font-size:.8rem;
-                       white-space:pre;color:#1a1a1a}
+                       white-space:pre;color:#1a1a1a;flex:1}
+    .copy-btn{background:none;border:1px solid #d0d0d0;border-radius:4px;
+              cursor:pointer;font-size:.75rem;color:#888;padding:.05rem .3rem;
+              line-height:1.4;white-space:nowrap;flex-shrink:0}
+    .copy-btn:hover{color:#333;background:#f0f0f0;border-color:#999}
     .card-body{padding:.6rem .9rem;font-size:.82rem}
     .card-body p{margin:.35rem 0}
     .card-body ul{margin:.35rem 0;padding-left:1.3rem}
@@ -500,31 +533,40 @@ function render_page()
            padding:2rem;border-top:1px solid #e0e0e0}
     /* ── Table view ── */
     #table-view{max-width:1400px;margin:0 auto;padding:2rem}
-    .table-wrap{overflow-x:auto;border:1px solid #e0e0e0;border-radius:8px}
-    #catalog-table{width:max-content;min-width:100%;border-collapse:collapse;
+    .table-wrap{border:1px solid #e0e0e0;border-radius:8px;overflow:hidden}
+    #catalog-table{width:100%;border-collapse:collapse;table-layout:fixed;
                    font-size:.82rem;background:#fff}
+    #catalog-table th:nth-child(1){width:2.5rem}
+    #catalog-table th:nth-child(2){width:9rem}
+    #catalog-table th:nth-child(3){width:12rem}
+    #catalog-table th:nth-child(4){width:8rem}
     #catalog-table th{background:#f3f4f6;color:#444;font-weight:700;
                       padding:.5rem .75rem;text-align:left;cursor:pointer;
                       border-bottom:2px solid #e0e0e0;white-space:nowrap;
-                      user-select:none}
+                      overflow:hidden;text-overflow:ellipsis;user-select:none}
     #catalog-table th:hover{background:#e9eaec}
     #catalog-table th.sort-asc::after{content:" ▲";font-size:.65rem;color:#888}
     #catalog-table th.sort-desc::after{content:" ▼";font-size:.65rem;color:#888}
     #catalog-table th:not(.sort-asc):not(.sort-desc)::after{content:" ↕";font-size:.65rem;color:#ccc}
     #catalog-table td{padding:.4rem .75rem;border-bottom:1px solid #f0f0f0;
-                      vertical-align:middle}
+                      vertical-align:middle;white-space:nowrap;
+                      overflow:hidden;text-overflow:ellipsis}
     #catalog-table tr:last-child td{border-bottom:none}
     #catalog-table tr.catalog-row{cursor:pointer}
     #catalog-table tr.catalog-row:hover td{background:#f0f9ff}
     #catalog-table tr.row-expanded td{background:#e0f2fe}
+    #catalog-table td.formula-cell{padding:0;overflow:hidden;white-space:normal}
+    .formula-flex{display:flex;align-items:center;gap:.3rem;
+                  padding:.4rem .75rem}
+    .formula-code-wrap{flex:1;min-width:0;overflow-x:auto}
     #catalog-table .formula-cell code{font-family:monospace;font-size:.76rem;
-                                       white-space:nowrap}
+                                       white-space:pre;display:block}
     .col-verified-true{background:#dcfce7;color:#16a34a;font-weight:700;
                        text-align:center;font-size:1rem}
     .col-verified-false{color:#d1d5db;text-align:center;font-size:1rem}
     .bool-true{color:#16a34a;font-weight:700;text-align:center}
     .bool-false{color:#9ca3af;text-align:center}
-    tr.detail-row td{padding:0;background:#f8fafc;border-bottom:2px solid #e0e0e0}
+    #catalog-table tr.detail-row td{padding:0;background:#f8fafc;border-bottom:2px solid #e0e0e0;white-space:normal}
     .row-detail-inner{padding:.75rem 1.25rem}
     .row-detail-meta{display:flex;gap:.75rem;align-items:center;
                      margin-bottom:.5rem;font-size:.8rem}
@@ -616,21 +658,65 @@ function render_page()
       });
     }
 
+    // Apply current table sort order to card grids so both views stay in sync.
+    function syncCardSort() {
+      const table    = document.getElementById('catalog-table');
+      const col      = table.dataset.sortCol;
+      const dir      = table.dataset.sortDir || 'asc';
+      const sortKeys = col ? [{col, dir}] : DEFAULT_SORT;
+      document.querySelectorAll('.card-grid').forEach(grid => {
+        const cards = Array.from(grid.querySelectorAll('.card'));
+        cards.sort((a, b) => {
+          for (const {col: c, dir: d} of sortKeys) {
+            const va = (a.dataset[c] || '').toLowerCase();
+            const vb = (b.dataset[c] || '').toLowerCase();
+            const cmp = va.localeCompare(vb);
+            if (cmp !== 0) return d === 'asc' ? cmp : -cmp;
+          }
+          return 0;
+        });
+        cards.forEach(c => grid.appendChild(c));
+      });
+    }
+
+    function copyFormulaBtn(btn) {
+      var prev = btn.previousElementSibling;
+      var text = (prev.tagName === 'CODE' ? prev : prev.querySelector('code')).textContent;
+      navigator.clipboard.writeText(text).then(function() {
+        var orig = btn.textContent;
+        btn.textContent = '\u2713';
+        setTimeout(function() { btn.textContent = orig; }, 1200);
+      });
+    }
+
     document.addEventListener('DOMContentLoaded', resetSort);
   </script>
 </head>
 <body>
   <header>
-    <h1>BayesianRegressionModels — Example Catalog</h1>
-    <p>$(length(CATALOG)) formulas · $(length(sources)) sources · $(n_verified) verified</p>
+    <div class="header-text">
+      <h1>BayesianRegressionModels — Example Catalog</h1>
+      <p>$(length(visible)) formulas · $(length(unique(e.source for e in visible))) sources · $(n_verified) verified</p>
+    </div>
+    <a class="github-link" href="https://github.com/PTWaade/BayesianRegressionModels.jl" target="_blank" rel="noopener">&#8599; GitHub</a>
   </header>
   <nav>
     <input type="hidden" id="active-source" value="">
     $(nav_items)
-    <label class="nav-verified">
+    <label class="nav-filter">
       <input type="checkbox" id="verified-only"
              _="on change call filterCatalog()">
-      Verified only
+      verified
+    </label>
+    <label class="nav-filter">
+      <input type="checkbox" id="parseable-only"
+             _="on change call filterCatalog()">
+      parseable
+    </label>
+    <label class="nav-filter">
+      <input type="checkbox" id="sampleable-only"
+             _="on change call filterCatalog()">
+      sampleable
     </label>
     <input id="search" type="text" placeholder="Filter by name, formula, dataset…"
            _="on keyup if event.key is 'Escape' set my value to '' end call filterCatalog()">
@@ -641,6 +727,7 @@ function render_page()
                    show #table-view
                    set my textContent to 'Cards'
                  else
+                   call syncCardSort()
                    show #card-view
                    hide #table-view
                    set my textContent to 'Table'
@@ -660,21 +747,32 @@ function render_page()
       <tbody id="catalog-tbody">$(table_rows)</tbody>
     </table></div>
   </div>
-  <footer>Generated from docstrings in <code>scripts/examples/</code></footer>
+  <footer>
+    <p style="max-width:60ch;margin:.5rem auto">A reference catalog of regression model formulas drawn from textbooks, R and Julia packages,
+    and community vignettes — intended as a test suite and inspiration source for
+    <a href="https://github.com/PTWaade/BayesianRegressionModels.jl" target="_blank" rel="noopener" style="color:#aaa">BayesianRegressionModels.jl</a>.</p>
+    <p>Generated from docstrings in <code>scripts/examples/</code> &mdash; <a href="https://github.com/PTWaade/BayesianRegressionModels.jl" target="_blank" rel="noopener" style="color:#888">&#8599; PTWaade/BayesianRegressionModels.jl</a></p>
+  </footer>
 </body>
 </html>"""
 end
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+# ── Entry point ──────────────────────────────────────────────────────────────
 
-const PORT = parse(Int, get(ENV, "PORT", "8080"))
-const HOST = get(ENV, "HOST", "0.0.0.0")
+if abspath(PROGRAM_FILE) == @__FILE__
+    # ── Routes ───────────────────────────────────────────────────────────────
 
-@info "Building catalog page…"
-const PAGE = render_page()
-@info "Done. $(length(CATALOG)) entries built. Starting server on $HOST:$PORT"
+    const PORT = parse(Int, get(ENV, "PORT", "8080"))
+    const HOST = get(ENV, "HOST", "0.0.0.0")
 
-@get "/"          function() html(PAGE) end
-@get "/index.html" function() html(PAGE) end
+    @info "Building catalog page…"
+    const PAGE = render_page()
+    let n_vis = count(e -> !is_hidden(e.source, e.key), CATALOG), n_hid = length(CATALOG) - n_vis
+        @info "Done. $n_vis entries built$(n_hid > 0 ? " ($n_hid hidden)" : ""). Starting server on $HOST:$PORT"
+    end
 
-serve(host=HOST, port=PORT, show_banner=false)
+    @get "/"          function() html(PAGE) end
+    @get "/index.html" function() html(PAGE) end
+
+    serve(host=HOST, port=PORT, show_banner=false)
+end
