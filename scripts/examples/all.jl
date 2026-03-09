@@ -22,6 +22,19 @@
 #   :kruschke       — DBDA2 (Kurz brms translation)
 #   :burkner_papers — Bürkner JSS 2017 + R Journal 2018
 #   :vasishth       — Bayesian Data Analysis for Cognitive Science
+#   :action_models  — ActionModels.jl (ComputationalPsychiatry); cognitive parameter regressions
+#   :epidist        — epidist (Epinowcast Community); delay distribution estimation via brms
+#   :epinowcast     — epinowcast + baselinenowcast; modular Bayesian nowcasting
+#   :rstanarm       — rstanarm vignettes (Stan-based Bayesian lm/glm/lmer/glmer/polr/betareg)
+#   :bmm            — bmm (Bayesian Measurement Models); visual working memory models via brms
+#   :flocker        — flocker; Bayesian occupancy models (single- and multi-season) via brms
+#   :mvgam          — mvgam; Multivariate Dynamic GAMs for time series via brms + mgcv
+#   :inla           — R-INLA; INLA with f() random effects (iid, rw1/2, ar1, besag, SPDE)
+#   :mcmcglmm       — MCMCglmm; MCMC GLMMs with animal models and multi-response
+#   :glmmtmb        — glmmTMB; GLMMs with ZI/hurdle, dispersion sub-models, covariance structures
+#   :lme4           — lme4 R package (Bates et al. 2015); frequentist LMM/GLMM
+#   :mixed_models_jl — MixedModels.jl (JuliaStats); frequentist Julia LMM/GLMM
+#   :glm_jl         — GLM.jl (JuliaStats); frequentist GLMs in Julia
 
 # ── Each source in its own module to avoid name clashes ─────────────────────
 
@@ -31,6 +44,19 @@ module _McElreath;     include("mcelreath.jl");      end
 module _Kruschke;      include("kruschke.jl");       end
 module _BurknerPapers; include("burkner_papers.jl"); end
 module _Vasishth;      include("vasishth.jl");       end
+module _ActionModels;  include("action_models.jl");  end
+module _Epidist;       include("epidist.jl");        end
+module _Epinowcast;    include("epinowcast.jl");     end
+module _Rstanarm;      include("rstanarm.jl");       end
+module _Bmm;           include("bmm.jl");            end
+module _Flocker;       include("flocker.jl");        end
+module _Mvgam;          include("mvgam.jl");           end
+module _Inla;          include("inla.jl");           end
+module _Mcmcglmm;      include("mcmcglmm.jl");       end
+module _Glmmtmb;       include("glmmtmb.jl");        end
+module _Lme4;           include("lme4.jl");            end
+module _MixedModelsJl;  include("mixed_models_jl.jl"); end
+module _GlmJl;          include("glm_jl.jl");          end
 
 const _SOURCE_MODULES = Dict{Symbol, Module}(
     :bambi          => _Bambi,
@@ -39,6 +65,19 @@ const _SOURCE_MODULES = Dict{Symbol, Module}(
     :kruschke       => _Kruschke,
     :burkner_papers => _BurknerPapers,
     :vasishth       => _Vasishth,
+    :action_models  => _ActionModels,
+    :epidist        => _Epidist,
+    :epinowcast     => _Epinowcast,
+    :rstanarm       => _Rstanarm,
+    :bmm            => _Bmm,
+    :flocker        => _Flocker,
+    :mvgam           => _Mvgam,
+    :inla            => _Inla,
+    :mcmcglmm        => _Mcmcglmm,
+    :glmmtmb         => _Glmmtmb,
+    :lme4            => _Lme4,
+    :mixed_models_jl => _MixedModelsJl,
+    :glm_jl          => _GlmJl,
 )
 
 # ── Catalog ───────────────────────────────────────────────────────────────────
@@ -478,6 +517,89 @@ const CATALOG = [
     (source=:burkner_papers, key=:multi_member_equal),
     (source=:burkner_papers, key=:multi_member_weighted),
 
+    # ── ActionModels.jl ───────────────────────────────────────────────────────
+
+    # Rescorla-Wagner × JGET (Mikus et al. 2025)
+    (source=:action_models, key=:rw_jget_lr),
+    (source=:action_models, key=:rw_jget_noise),
+
+    # PVL-Delta × Iowa Gambling Task (Ahn et al. 2014)
+    (source=:action_models, key=:pvl_igt_lr),
+    (source=:action_models, key=:pvl_igt_reward),
+    (source=:action_models, key=:pvl_igt_loss),
+    (source=:action_models, key=:pvl_igt_noise),
+
+    # ── epidist (Epinowcast) ──────────────────────────────────────────────────
+
+    # Epidemiological Delay Distributions
+    (source=:epidist, key=:delay_naive),
+    (source=:epidist, key=:delay_marginal),
+
+    # ── epinowcast + baselinenowcast ──────────────────────────────────────────
+
+    # Basic nowcast (single timeseries)
+    (source=:epinowcast, key=:enw_basic),
+    (source=:epinowcast, key=:enw_report_dow),
+    (source=:epinowcast, key=:enw_np_reference),
+
+    # Age-stratified hierarchical nowcast
+    (source=:epinowcast, key=:enw_age_reference),
+    (source=:epinowcast, key=:enw_age_week_reference),
+
+    # Renewal process with Rt estimation
+    (source=:epinowcast, key=:enw_rt_renewal),
+
+    # Baseline nowcast (empirical, non-Bayesian)
+    (source=:epinowcast, key=:bnc_empirical),
+
+    # ── rstanarm vignettes ────────────────────────────────────────────────────
+
+    # Motor Trend Cars (Priors vignette)
+    (source=:rstanarm, key=:mtcars_lm),
+
+    # Cloud Seeding (Regularized LM vignette)
+    (source=:rstanarm, key=:clouds_lm),
+
+    # Women's Role Survey (Getting Started vignette)
+    (source=:rstanarm, key=:womensrole_logit),
+    (source=:rstanarm, key=:womensrole_quad),
+
+    # Child IQ (Continuous vignette)
+    (source=:rstanarm, key=:kidiq_hs),
+    (source=:rstanarm, key=:kidiq_iq),
+    (source=:rstanarm, key=:kidiq_both),
+    (source=:rstanarm, key=:kidiq_interaction),
+
+    # Blood Clotting — Gamma GLM (Continuous vignette)
+    (source=:rstanarm, key=:clotting_gamma),
+
+    # Bangladesh Wells (Binomial vignette)
+    (source=:rstanarm, key=:wells_dist),
+    (source=:rstanarm, key=:wells_both),
+
+    # Urban Roaches (Count vignette)
+    (source=:rstanarm, key=:roaches_poisson),
+    (source=:rstanarm, key=:roaches_nb),
+
+    # Rat Weight Gain (ANOVA vignette)
+    (source=:rstanarm, key=:weightgain_anova),
+    (source=:rstanarm, key=:weightgain_re),
+
+    # Esophageal Cancer (Ordinal vignette)
+    (source=:rstanarm, key=:esoph_polr),
+
+    # Gasoline Yield (Beta regression vignette)
+    (source=:rstanarm, key=:gasoline_beta),
+    (source=:rstanarm, key=:gasoline_beta_distr),
+
+    # Bovine Pleuropneumonia GLMM (Mixed Effects vignette)
+    (source=:rstanarm, key=:cbpp_glmm),
+
+    # MLB Batting Partial Pooling (Pooling vignette)
+    (source=:rstanarm, key=:bball_pooled),
+    (source=:rstanarm, key=:bball_nopooling),
+    (source=:rstanarm, key=:bball_partial),
+
     # ── Vasishth / Nicenboim / Schad ──────────────────────────────────────────
 
     # Pupil Dilation
@@ -519,6 +641,177 @@ const CATALOG = [
     # Individual Differences
     (source=:vasishth, key=:indiv_diff_naive),
     (source=:vasishth, key=:indiv_diff_me),
+
+    # ── bmm (Bayesian Measurement Models) ─────────────────────────────────────
+
+    # Color Wheel Mixture Models
+    (source=:bmm, key=:mixture2p_setsize),
+    (source=:bmm, key=:mixture3p_setsize),
+
+    # Signal Discrimination Model
+    (source=:bmm, key=:sdm_condition),
+
+    # Interference Measurement Model
+    (source=:bmm, key=:imm_full_condition),
+
+    # ── flocker (Flexible Occupancy Estimation) ────────────────────────────────
+
+    # Single-Season Occupancy
+    (source=:flocker, key=:single_season_repvarying),
+    (source=:flocker, key=:single_season_repconstant),
+
+    # Multi-Season Colonisation-Extinction
+    (source=:flocker, key=:colex_explicit),
+    (source=:flocker, key=:colex_equilibrium),
+
+    # Multi-Season Autologistic
+    (source=:flocker, key=:autologistic_equilibrium),
+
+    # Data-Augmented Species Richness
+    (source=:flocker, key=:augmented_multispecies),
+
+    # ── mvgam (Multivariate Dynamic GAMs) ─────────────────────────────────────
+
+    # Portal Rodent Counts
+    (source=:mvgam, key=:portal_glm_re),
+    (source=:mvgam, key=:portal_ar_ndvi),
+    (source=:mvgam, key=:portal_shared_trend),
+
+    # Plankton VAR
+    (source=:mvgam, key=:plankton_var),
+
+    # Salmon Survival (Beta + Time-Varying Effect)
+    (source=:mvgam, key=:salmon_beta_ar),
+
+    # N-Mixture Detection/Abundance
+    (source=:mvgam, key=:nmix_detection),
+
+    # ── lme4 (frequentist LMM/GLMM, R) ───────────────────────────────────────
+
+    # Sleep Deprivation
+    (source=:lme4, key=:sleepstudy_slope),
+    (source=:lme4, key=:sleepstudy_uncorr),
+
+    # Dyestuff
+    (source=:lme4, key=:dyestuff_re),
+
+    # CBPP
+    (source=:lme4, key=:lme4_cbpp_glmm),
+
+    # Penicillin
+    (source=:lme4, key=:penicillin_crossed),
+
+    # Pastes
+    (source=:lme4, key=:pastes_nested),
+
+    # Verbal Aggression
+    (source=:lme4, key=:verbagg_crossed),
+
+    # Contraception
+    (source=:lme4, key=:contraception_urban),
+
+    # ── MixedModels.jl (frequentist LMM/GLMM, Julia) ─────────────────────────
+
+    # Dyestuff
+    (source=:mixed_models_jl, key=:dyestuff_re),
+
+    # Sleep Deprivation
+    (source=:mixed_models_jl, key=:sleepstudy_slope),
+    (source=:mixed_models_jl, key=:sleepstudy_zerocorr),
+
+    # Penicillin
+    (source=:mixed_models_jl, key=:penicillin_crossed),
+
+    # Pastes
+    (source=:mixed_models_jl, key=:pastes_nested),
+
+    # Verbal Aggression
+    (source=:mixed_models_jl, key=:verbagg_crossed),
+
+    # Contraception
+    (source=:mixed_models_jl, key=:contraception_glmm),
+
+    # ── R-INLA ────────────────────────────────────────────────────────────────
+
+    # Basic Gaussian LM
+    (source=:inla, key=:cement_lm),
+
+    # Random intercept / slopes (IID)
+    (source=:inla, key=:penicillin_iid),
+    (source=:inla, key=:sleepstudy_iid),
+    (source=:inla, key=:sleepstudy_slopes),
+
+    # Temporal latent fields
+    (source=:inla, key=:airp_rw1),
+    (source=:inla, key=:airp_rw2),
+    (source=:inla, key=:airp_ar1),
+    (source=:inla, key=:airp_seasonal),
+
+    # Survival
+    (source=:inla, key=:veteran_weibull),
+
+    # Nonparametric smoothing
+    (source=:inla, key=:lidar_rw2),
+
+    # Areal spatial
+    (source=:inla, key=:surg_binomial),
+    (source=:inla, key=:boston_besag),
+
+    # ── MCMCglmm ──────────────────────────────────────────────────────────────
+
+    # Univariate Gaussian GLMM
+    (source=:mcmcglmm, key=:plodia_iid),
+
+    # Blue Tit mixed models
+    (source=:mcmcglmm, key=:btdata_iid),
+    (source=:mcmcglmm, key=:btdata_animal),
+
+    # Random regression
+    (source=:mcmcglmm, key=:chickweight_rslope),
+
+    # Multi-response
+    (source=:mcmcglmm, key=:btdata_bivariate),
+    (source=:mcmcglmm, key=:pbcseq_bivariate),
+
+    # Ordinal threshold
+    (source=:mcmcglmm, key=:sshorns_ordinal),
+
+    # ── glmmTMB ───────────────────────────────────────────────────────────────
+
+    # Barn owls: ZI and hurdle variants
+    (source=:glmmtmb, key=:owls_zip),
+    (source=:glmmtmb, key=:owls_zinb2),
+    (source=:glmmtmb, key=:owls_zinb1),
+    (source=:glmmtmb, key=:owls_hurdle),
+
+    # Salamanders: species-level ZI
+    (source=:glmmtmb, key=:salamanders_zinb2),
+    (source=:glmmtmb, key=:salamanders_genpois),
+
+    # Distributional beta
+    (source=:glmmtmb, key=:beta_disp),
+
+    # Covariance structures
+    (source=:glmmtmb, key=:ar1_covar),
+    (source=:glmmtmb, key=:volcano_spatial),
+
+    # ── GLM.jl (frequentist GLMs, Julia) ─────────────────────────────────────
+
+    # Dobson Poisson
+    (source=:glm_jl, key=:dobson_poisson),
+
+    # Quine Absenteeism
+    (source=:glm_jl, key=:quine_nb),
+    (source=:glm_jl, key=:quine_poisson),
+
+    # Trees
+    (source=:glm_jl, key=:trees_lm),
+
+    # Pima Diabetes
+    (source=:glm_jl, key=:pima_logistic),
+
+    # Life-Cycle Savings
+    (source=:glm_jl, key=:savings_ols),
 ]
 
 # ── Register each entry as a documented get_examples method ──────────────────

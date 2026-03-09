@@ -1,0 +1,8 @@
+name = "CatalogServer"
+uuid = "a1b2c3d4-0000-0000-0000-000000000001"
+version = "0.1.0"
+
+[deps]
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+Oxygen = "df9a0d86-3283-4920-82dc-4555fc0d1d8b"
+YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
