@@ -6,13 +6,14 @@
 # Usage (from the repo root):
 #   julia --project=scripts scripts/render_catalog.jl
 
-include(joinpath(@__DIR__, "server.jl"))
+using CatalogServer
+
+include(joinpath(@__DIR__, "examples", "all.jl"))
 
 @info "Rendering catalog…"
-page = render_page()
+page = CatalogServer.render_page(CATALOG, _SOURCE_MODULES)
 out  = joinpath(@__DIR__, "..", "docs", "index.html")
 mkpath(dirname(out))
 write(out, page)
-let n_vis = count(e -> !is_hidden(e.source, e.key), CATALOG), n_hid = length(CATALOG) - n_vis
-    @info "Written $out ($n_vis entries$(n_hid > 0 ? ", $n_hid hidden" : ""))"
-end
+n_vis = length(CATALOG)
+@info "Written $out ($n_vis entries)"
