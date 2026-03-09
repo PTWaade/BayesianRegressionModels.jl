@@ -27,7 +27,13 @@ jobs:
       - uses: julia-actions/cache@v2
 
       - name: Instantiate scripts environment
-        run: julia --project=scripts -e 'import Pkg; Pkg.instantiate()'
+        run: |
+          julia --project=scripts -e '
+            import Pkg
+            Pkg.develop(Pkg.PackageSpec(path="."))
+            Pkg.add(Pkg.PackageSpec(url="https://github.com/penelopeysm/FlexiChains.jl"))
+            Pkg.instantiate()
+          '
 
       - name: Render catalog
         run: julia --project=scripts scripts/render_catalog.jl
