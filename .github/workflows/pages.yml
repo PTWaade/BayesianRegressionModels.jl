@@ -22,22 +22,15 @@ jobs:
 
       - uses: julia-actions/setup-julia@v2
         with:
-          version: '1'
+          version: '1.10'
 
       - uses: julia-actions/cache@v2
 
-      - name: Instantiate scripts environment
-        run: |
-          julia --project=scripts -e '
-            import Pkg
-            Pkg.develop(Pkg.PackageSpec(path="."))
-            Pkg.develop(Pkg.PackageSpec(path="scripts/CatalogServer"))
-            Pkg.add(Pkg.PackageSpec(url="https://github.com/penelopeysm/FlexiChains.jl"))
-            Pkg.instantiate()
-          '
+      - name: Instantiate render environment
+        run: julia --project=scripts/render_env -e 'import Pkg; Pkg.instantiate()'
 
       - name: Render catalog
-        run: julia --project=scripts scripts/render_catalog.jl
+        run: julia --project=scripts/render_env scripts/render_catalog.jl
 
       - uses: actions/upload-pages-artifact@v3
         with:
