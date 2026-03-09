@@ -4,16 +4,39 @@
 ## 1. Random effect geometry enumerator ##
 @enum RandomEffectGeometry Centered NonCentered
 
-## 2. Prior struct, distribution that coefficients can be sampled from ##
-struct RegressionPrior{Tfixed<:MultivariateDistribution,Tsds<:MultivariateDistribution,Tcorrs<:AbstractVector,Tspecs<:RegressionSpecifications} <: ContinuousMultivariateDistribution
+"""
+    abstract type RegressionVariate end
 
-    #Multivariate distribution flattened from vector (R regressions) of multivariate priors (across P fixed effect terms)
+Subtype of `Distributions.VariateForm`, which marks a distribution over a set of regression
+coefficients. Used only in `RegressionPrior`.
+"""
+abstract type RegressionVariate <: Distributions.VariateForm end
+
+"""
+    RegressionPrior(
+        fixed_effects::MultivariateDistribution,
+        random_effect_sds::MultivariateDistribution,
+        random_effect_correlations_cholesky::AbstractVector,
+        specifications::RegressionSpecifications
+    ) <: Distribution{RegressionVariate, Continuous}
+
+A custom distribution type which encodes the prior over all regression coefficients (fixed
+effects, random effect standard deviations and random effect correlations) in a single
+object.
+"""
+struct RegressionPrior{
+    Tfixed<:MultivariateDistribution,
+    Tsds<:MultivariateDistribution,
+    Tcorrs<:AbstractVector,
+    Tspecs<:RegressionSpecifications
+} <: Distributions.Distribution{RegressionVariate,Distributions.Continuous}
+    "Multivariate distribution, constructed via `product_distribution` on a vector (R regressions) of multivariate priors (across P fixed effect terms)"
     fixed_effects::Tfixed
 
-    #Multivariate distribution flattened from vector (R regressions) of vectors (F Random effect factors) of vectors (G random effect groups) of vectors (Q random effect terms)
+    "Multivariate distribution flattened from vector (R regressions) of vectors (F Random effect factors) of vectors (G random effect groups) of vectors (Q random effect terms)"
     random_effect_sds::Tsds
 
-    #Vector (F random effect factors) of vectors (G random effect groups) of vectors (B random effect blocks) of LKJCholesky correlation priors
+    "Vector (F random effect factors) of vectors (G random effect groups) of vectors (B random effect blocks) of LKJCholesky correlation priors"
     random_effect_correlations_cholesky::Tcorrs
 
     #Model specifications
@@ -33,7 +56,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
 
     ## 1. Sample all fixed effects p for each regression r ##
     fixed_effects_flat = rand(rng, d.fixed_effects)
-    
+
     ## 2. Sample random effect standard deviations for each term q in each group g per factor f in regression r ##
     random_effect_sds_flat = rand(rng, d.random_effect_sds)
 
@@ -41,8 +64,8 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
     random_effect_correlations_cholesky = DimArray([
             DimArray([
                     DimArray([
-                        #For every block b
-                        begin
+                            #For every block b
+                            begin
                                 #Extract the prior
                                 prior_random_effect_correlations_cholesky_b = d.random_effect_correlations_cholesky[At(f)][At(g)][At(b)]
 
@@ -51,7 +74,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
 
                                     #Get the number of terms in this correlation block
                                     n_terms = length(specifications.random_effect_sds_block_indices[At(f)][At(g)][At(b)])
-                                    
+
                                     #Generate a Cholesky object corresponding to an identity covariance matrix implying uncorrelated random effects
                                     Cholesky(Matrix{Float64}(I, n_terms, n_terms), :L, 0)
 
@@ -70,7 +93,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
 
     ## 4. Sample the random effects themselves, factor by factor ## 
     #Initialise storage for random effect values
-    random_effects = DimArray(Vector{DimArray{Float64,2,<:Tuple{CategoricalLevelDim,RandomEffectTermDim}}}(undef, length(labels.random_effect_factors)), labels.random_effect_factors) 
+    random_effects = DimArray(Vector{DimArray{Float64,2,<:Tuple{CategoricalLevelDim,RandomEffectTermDim}}}(undef, length(labels.random_effect_factors)), labels.random_effect_factors)
 
     #Go through each factor f
     for f in labels.random_effect_factors
@@ -95,7 +118,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
         for g in random_effect_group_labels_f
 
             # 4.1 Find levels belonging to this group
-            random_effect_level_labels_g = random_effect_level_labels_f[group_assignments_f .== g]
+            random_effect_level_labels_g = random_effect_level_labels_f[group_assignments_f.==g]
 
             #Go through every block b
             for b in random_effect_block_labels_f
@@ -116,7 +139,7 @@ function Distributions.rand(rng::AbstractRNG, d::D) where {D<:RegressionPrior}
                         end
                     end
                 end
-                
+
                 # 4.3 If there are no terms in this block, skip to next block
                 isempty(random_effect_term_labels_b) && continue
 
@@ -188,7 +211,7 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPrior,T<:Regressio
         for g in labels.random_effect_groups[At(f)]
 
             # 3.1 Identify levels belonging to this group
-            random_effect_levels_g = labels.categorical_levels[At(f)][group_assignments_f .== g]
+            random_effect_levels_g = labels.categorical_levels[At(f)][group_assignments_f.==g]
 
             # Go through every correlation block b
             for b in labels.random_effect_blocks[At(f)]
@@ -199,7 +222,7 @@ function Distributions.logpdf(d::D, x::T) where {D<:RegressionPrior,T<:Regressio
                 #If there is a LKJCholesky prior
                 if !isnothing(prior_random_effect_correlations_cholesky_b)
                     #Add the logprob
-                     logprob += logpdf(prior_random_effect_correlations_cholesky_b, random_effect_correlations_cholesky_b)
+                    logprob += logpdf(prior_random_effect_correlations_cholesky_b, random_effect_correlations_cholesky_b)
                 end
 
                 # 3.4 Extract random effect terms for this block across all regressions
@@ -268,33 +291,33 @@ function generate_indices(labels::RegressionLabels, random_effect_block_assignme
 
     ## Fixed effects ##
     fixed_effect_indices = DimArray(
-        Vector{UnitRange{Int}}(undef, length(labels.regressions)), 
+        Vector{UnitRange{Int}}(undef, length(labels.regressions)),
         labels.regressions
     )
     curr_idx = 1
     for r in labels.regressions
         n_terms = length(labels.fixed_effect_terms[At(r)])
-        fixed_effect_indices[At(r)] = curr_idx:(curr_idx + n_terms - 1)
+        fixed_effect_indices[At(r)] = curr_idx:(curr_idx+n_terms-1)
         curr_idx += n_terms
     end
 
     ## Random effect SDs ##
     random_effect_sds_indices = DimArray([
-        DimArray([
-            DimArray(
-                Vector{UnitRange{Int}}(undef, length(labels.random_effect_groups[At(f)])), 
-                labels.random_effect_groups[At(f)]
-            )
-            for f in labels.random_effect_factors
-        ], labels.random_effect_factors)
-        for r in labels.regressions
-    ], labels.regressions)
+            DimArray([
+                    DimArray(
+                        Vector{UnitRange{Int}}(undef, length(labels.random_effect_groups[At(f)])),
+                        labels.random_effect_groups[At(f)]
+                    )
+                    for f in labels.random_effect_factors
+                ], labels.random_effect_factors)
+            for r in labels.regressions
+        ], labels.regressions)
     curr_idx = 1
     for r in labels.regressions
         for f in labels.random_effect_factors
             for g in labels.random_effect_groups[At(f)]
                 n_terms = length(labels.random_effect_terms[At(r)][At(f)])
-                random_effect_sds_indices[At(r)][At(f)][At(g)] = curr_idx:(curr_idx + n_terms - 1)
+                random_effect_sds_indices[At(r)][At(f)][At(g)] = curr_idx:(curr_idx+n_terms-1)
                 curr_idx += n_terms
             end
         end
@@ -302,36 +325,36 @@ function generate_indices(labels::RegressionLabels, random_effect_block_assignme
 
     ## Random effect SDs -> block indices ##
     random_effect_sds_block_indices = DimArray([
-        DimArray([
             DimArray([
-                # Collect absolute indices across all regressions
-                reduce(vcat, [
-                    begin
-                        r_f_g_range = random_effect_sds_indices[At(r)][At(f)][At(g)]
-                        
-                        # Find which terms in this Regression-Factor belong to block 'b'
-                        # parent() is used to get the raw vector of block symbols
-                        local_indices = findall(==(b), parent(random_effect_block_assignments[At(r)][At(f)]))
-                        
-                        # If local_indices is empty or the range is empty (1:0), 
-                        # we return an empty Int vector.
-                        if isempty(local_indices) || isempty(r_f_g_range)
-                            Int[]
-                        else
-                            # Map local term indices to absolute indices in the flat vector
-                            # We take the start of the range and add the local offsets
-                            # local_indices are 1-based, so subtract 1
-                            collect((r_f_g_range.start - 1) .+ local_indices)
-                        end
-                    end
-                    for r in labels.regressions
-                ])
-                for b in labels.random_effect_blocks[At(f)]
-            ], labels.random_effect_blocks[At(f)])
-            for g in labels.random_effect_groups[At(f)]
-        ], labels.random_effect_groups[At(f)])
-        for f in labels.random_effect_factors
-    ], labels.random_effect_factors)
+                    DimArray([
+                            # Collect absolute indices across all regressions
+                            reduce(vcat, [
+                                begin
+                                    r_f_g_range = random_effect_sds_indices[At(r)][At(f)][At(g)]
+
+                                    # Find which terms in this Regression-Factor belong to block 'b'
+                                    # parent() is used to get the raw vector of block symbols
+                                    local_indices = findall(==(b), parent(random_effect_block_assignments[At(r)][At(f)]))
+
+                                    # If local_indices is empty or the range is empty (1:0), 
+                                    # we return an empty Int vector.
+                                    if isempty(local_indices) || isempty(r_f_g_range)
+                                        Int[]
+                                    else
+                                        # Map local term indices to absolute indices in the flat vector
+                                        # We take the start of the range and add the local offsets
+                                        # local_indices are 1-based, so subtract 1
+                                        collect((r_f_g_range.start - 1) .+ local_indices)
+                                    end
+                                end
+                                for r in labels.regressions
+                            ])
+                            for b in labels.random_effect_blocks[At(f)]
+                        ], labels.random_effect_blocks[At(f)])
+                    for g in labels.random_effect_groups[At(f)]
+                ], labels.random_effect_groups[At(f)])
+            for f in labels.random_effect_factors
+        ], labels.random_effect_factors)
 
     return (fixed_effect_indices, random_effect_sds_indices, random_effect_sds_block_indices)
 
