@@ -11,18 +11,20 @@ PDMats = "90014a1f-27ba-587c-ab20-58faa44d9150"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [weakdeps]
+Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 
 [extensions]
-BRMTuringExt = ["Turing", "FlexiChains"]
+BRMTuringExt = ["Turing", "FlexiChains", "Bijectors"]
 
 [compat]
-DimensionalData = "0.29"
+Bijectors = "0.15.17"
+DimensionalData = "0.29, 0.30"
 Distributions = "0.25"
 FlexiChains = "0.3"
 LinearAlgebra = "1.10"
 PDMats = "0.11"
 Random = "1.10"
-Turing = "0.40"
+Turing = "0.43"
 julia = "1.10"
