@@ -8,7 +8,7 @@ using FlexiChains: VNChain
 ### INPUT FROM FORMULA ###
 ##########################
 
-## NOTE: THIS IS AN INITIAL SUGGESTION FOR A FORMULA SYNTAX. THERE CANBEMUCH BETTER WAYS TO DO IT. THE SUGGESTION IS THAT IT DECOMPOSES INTO OPERATIONS - SEE BELOW
+## NOTE: THIS IS AN INITIAL SUGGESTION FOR A FORMULA SYNTAX. THERE CAN BE MUCH BETTER WAYS TO DO IT. THE SUGGESTION IS THAT IT DECOMPOSES INTO OPERATIONS - SEE BELOW
 
 # @formula BMI = 1, data = dBMI, measurement_error(sd = 1, observations = BMI_measured)  <- this is to generate a latent BMI variable, where the BMI_measured is a noisy measurement of it.
 
@@ -21,7 +21,7 @@ using FlexiChains: VNChain
 
 # @likelihood Performance ~ Normal(performance_mean, performance_sd)
 
-# @group Subject by = ClinicalGroup
+# @group Subject by = ClinicalGroup prior = nothing
 # @block Subject Block1 Performance = [Treatment] Accuracy = [Age:BMI]
 # @block Subject Block2 Accuracy = [Age, BMI]
 
