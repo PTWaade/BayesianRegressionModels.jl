@@ -1,49 +1,26 @@
-macro brm(x)
-    dump(x)
-end
-# The example BRM model is supposed to work with three dataframes (dBMI, dpmean, dpsd), which IIUC, have to have the same numbers of rows in this example and could have been merged into one.
-@brm model(dBMI, dpmean, dpsd) = begin 
-    # BMI will be a model parameter
-    BMI ~ Normal(dBMI.BMI_measured, 1) # equivalently: BMI ~ Normal(BMI_measured, 1) |> (data=dBMI) 
-    # Age_first, Age_second are functions of data, and would be computed/updated exactly once
-    Age_first, Age_second = ploynomial_expand(dpmean.Age; order=2) # equivalently: Age_first, Age_second = ploynomial_expand(Age; order=2) |> (data=dpmean) 
-    # I'm assuming performance_mean is a function of data and model parameters - I think it kind of has to be
-    performance_mean ~ 1 + Age_first * Treatment + Age_second + (1 + Treatment | Subject) + (1 + Age_first | Experimenter) |> (data=dpmean)
-    # I'm assuming performance_sd is a function of data and model parameters - I think it kind of has to be
-    log(performance_sd) ~ 1 + AGE * BMI + max(Age, BMI) + (1 + Age * BMI | Subject) |> (data=dpsd)
-    # Peter didn't specify data here - but I think it would have to be specified? Or would it be added to the model via conditioning syntax?
-    Performance ~ Normal(performance_mean, performance_sd) # |> (data=observations_df) as an example
-    @defaults begin 
-        gr(Subject, by=ClinicalGroup,
-            Block1=>[Treatment, Age:BMI],
-            Block2=>[Age, BMI]
-        )
-    end
-end
-
-# With a single dataframe, the model definition could look as follows (which would lower to the "obvious" syntax):
-model = @brm begin 
-    # BMI ~ Normal(BMI_measured, 1)
-    Age_first, Age_second = ploynomial_expand(Age; order=2)
-    performance_mean ~ 1 + Age_first * Treatment + Age_second + (1 + Treatment | Subject) + (1 + Age_first | Experimenter)
-    log(performance_sd) ~ 1 + AGE * BMI + max(Age, BMI) + (1 + Age * BMI | Subject)
-    Performance ~ Normal(performance_mean, performance_sd)
-    @defaults begin 
-        gr(Subject, by=ClinicalGroup,
-            Block1=>[Treatment, Age:BMI],
-            Block2=>[Age, BMI]
-        )
-    end
-end
-
-
+using OrderedCollections
 macro brm(x)
     esc(_brm(x))
 end
+macro brm(df, x)
+    esc(Expr(:call, _brm(x), df)) 
+end
+macro n(x)
+    esc(_n(x))
+end
+macro x(x)
+    esc(_x(x))
+end
+macro getproperty(x)
+    esc(_getproperty(x))
+end
+_getproperty(x::Expr) = begin 
+    @assert x.head == :(.)
+    @assert length(x.args) == 2
+    lhs, qrhs = x.args
+    :(hasproperty($lhs, $qrhs) ? $x : $(qrhs.value))
+end
 begin
-function ensurecols end
-function maybedists end
-# isxcall(x) = Meta.isexpr(x, :call)
 isxcall(x, f) = Meta.isexpr(x, :call) && x.args[1] == f
 fixcall(x) = x
 fixcall(x::Expr) = if Meta.isexpr(x, :call)
@@ -65,101 +42,182 @@ fixcall(x::Expr) = if Meta.isexpr(x, :call)
 else
     Expr(x.head, fixcall.(x.args)...)
 end
-xensurecols(x::Expr) = if x.head == :call
-    Expr(:call, ensurecols, x.args...) |> fixcall
-else 
-    dump(x)
-    error("Don't know how to handle xensurecols($x)!")
+function assign end
+function doublepipe end
+function gr end
+_brm(x::AbstractString; kwargs...) = _brm(Meta.parse("""
+begin
+    $x
 end
-    parse!(x::LineNumberNode; info) = x
-parse!(x::Expr; info) = if x.head == :block
-    Expr(:block, parse!.(x.args; info)...)
-elseif x.head == :(=)
-    lhs, rhs = x.args
-    lhs = parse_assignment_lhs!(lhs; info)
-    rhs = parse_assignment_rhs!(rhs; info)
-    Expr(:(=), lhs, xensurecols(rhs))
-elseif isxcall(x, :~)
-    _, lhs, rhs = x.args
-    lhs = parse_sampling_lhs!(lhs; info)
-    rhs = parse_sampling_rhs!(rhs; info)
-    if isxcall(rhs, ensurecols)
-        :($lhs = $maybedists(;force=isdata($lhs))($(rhs.args[2:end]...)))
-    else
-        :($lhs = $maybedists(;force=isdata($lhs))($(rhs)))
-    end
-else
-    dump(x)
-    error("Don't know how to handle parse!($x)!")
-end
-parse_assignment_lhs!(x::Symbol; info) = (get!(info.alllocals, x, :local); x)
-parse_assignment_lhs!(x::Expr; info) = begin 
-    @assert Meta.isexpr(x, (:tuple, :vect))
-    args = parse_assignment_lhs!.(x.args; info)
-    Expr(x.head, args...)
-end
-parse_assignment_rhs!(x::Symbol; info) = (get!(info.alllocals, x, :nonlocal); x)
-parse_assignment_rhs!(x::Expr; info) = if x.head == :call
-    Expr(:call, x.args[1], parse_assignment_rhs!.(x.args[2:end]; info)...)
-elseif Meta.isexpr(x, :parameters)
-    x
-else
-    dump(x)
-    error("Don't know how to handle parse_assignment_rhs!($x)!")
-end
-parse_sampling_lhs!(x::Symbol; info) = (get!(info.alllocals, x, :maybelocal); x)
-parse_sampling_lhs!(x::Expr; info) = if x.head == :call
-    Expr(:call, x.args[1], parse_sampling_lhs!.(x.args[2:end]; info)...)
-else 
-    @assert Meta.isexpr(x, (:tuple, :vect))
-    args = parse_sampling_lhs!.(x.args; info)
-    Expr(x.head, args...)
-end
-parse_sampling_rhs!(x::Number; info) = x
-parse_sampling_rhs!(x::Symbol; info) = (get!(info.alllocals, x, :nonlocal); x)
-parse_sampling_rhs!(x::Expr; info) = if x.head == :call
-    if x.args[1] in (:+, :*, :|)
-        Expr(:call, x.args[1], parse_sampling_rhs!.(x.args[2:end]; info)...)
-    else
-        xensurecols(parse_assignment_rhs!(x; info))
-    end
-elseif Meta.isexpr(x, :parameters)
-    x
-else
-    dump(x)
-    error("Don't know how to handle parse_sampling_rhs!($x)!")
-end
-using OrderedCollections
-_brm(x::Expr) = begin 
-    @assert x.head == :block
+"""); kwargs...)
+_brm(x::Expr; df=nothing) = begin 
+    lhs, x = x.head == :(=) ? x.args : (:($(gensym("model"))(__df__)), x)
     alllocals = OrderedDict{Symbol,Symbol}()
     info = (;alllocals)
     x = parse!(x; info)
     nonlocals = [key for (key, value) in pairs(alllocals) if value == :nonlocal]
     maybelocals = [key for (key, value) in pairs(alllocals) if value == :maybelocal]
-    locals = [key for (key, value) in pairs(alllocals) if value == :local]
     init = quote
         (;$(nonlocals...)) = data(__df__)
         (;$(maybelocals...)) = maybedata(__df__)
     end
-    finalize = :(BRM(;$(keys(alllocals)...)))
-    Expr(:(=), :(model(__df__)), Expr(:block, init, x.args..., finalize))
+    finalize = quote
+        $BRMI(;$(keys(alllocals)...))
+    end
+    if isnothing(df)
+        Expr(:(=), lhs, Expr(:block, init, x, finalize))
+    else
+        Expr(:let, 
+            Expr(:block, :(__df__ = $df), :(__ddf__ = $data(__df__)), [:($nonlocal = @getproperty __ddf__.$nonlocal) for nonlocal in nonlocals]...), 
+            Expr(:block, :((;$(maybelocals...)) = maybedata(__df__)), x, finalize)
+        )
+    end
 end
+brm(df, formula::AbstractString) = eval(_brm(formula; df))
+parse!(x; info) = x
+parse!(x::Expr; info) = if x.head == :block
+    Expr(:block, parse!.(x.args; info)...)
+elseif x.head == :(=)
+    lhs, rhs = x.args
+    parselocals!(rhs; info, val=:nonlocal)
+    parselocals!(lhs; info, val=:local)
+    :(@n $lhs = @x $assign($(xname(lhs)), $rhs))
+elseif isxcall(x, :~)
+    _, lhs, rhs = x.args
+    parselocals!(rhs; info, val=:nonlocal)
+    parselocals!(lhs; info, val=:maybelocal)
+    :(@n $lhs = @x $x)
+else
+    dump(x)
+    error("Don't know how to handle parse!($x)!")
 end
-@macroexpand @brm begin 
-    Age_first, Age_second = ploynomial_expand(Age; order=2)
-    performance_mean ~ 1 + Age_first * Treatment + Age_second + (1 + Treatment | Subject) + (1 + Age_first | Experimenter)
-    log(performance_sd) ~ 1 + Age * BMI + max(Age, BMI) + (1 + Age * BMI | Subject)
-    Performance ~ Normal(performance_mean, performance_sd)
+parselocals!(x; kwargs...) = x
+parselocals!(x::Symbol; info, val) = get!(info.alllocals, x, val)
+parselocals!(x::Expr; info, val) = if Meta.isexpr(x, (:call, :kw))
+    parselocals!.(x.args[2:end]; info, val)
+else
+    parselocals!.(x.args; info, val)
 end
+_n(x::Expr) = begin 
+    @assert x.head == :(=)
+    lhs, rhs = x.args
+    alhs = xassignable(lhs)
+    nlhs = xname(alhs)
+    :($alhs = $NamedColumn($nlhs, $rhs))
+end
+xassignable(x::Symbol) = x
+xassignable(x::Expr) = if Meta.isexpr(x, (:tuple, :vect))
+    Expr(x.head, xassignable.(x.args)...)
+elseif x.head == :call 
+    if length(x.args) == 2
+        xassignable(x.args[2])
+    else
+        @warn "Don't know how to handle xassignable($x)!"
+        Symbol(x)
+    end
+else
+    dump(x)
+    error("Don't know how to handle xassignable($x)!")
+end
+xname(x::Symbol) = Meta.quot(x)
+xname(x::Expr) = if Meta.isexpr(x, (:tuple, :vect))
+    Expr(x.head, xname.(x.args)...)
+else
+    @warn "Don't know how to handle xassignable($x)!"
+    Symbol(x)
+    # dump(x)
+    # error("Don't know how to handle xname($x)!")
+end
+_x(x) = x
+_x(x::Symbol) = x
+_x(x::Expr) = if x.head == :call
+    Expr(:call, ExprColumn, _x.(x.args)...) |> fixcall
+elseif x.head ==  :||
+    Expr(:call, ExprColumn, doublepipe, _x.(x.args)...)
+else
+    Expr(x.head, _x.(x.args)...)
+end
+struct Data{P}
+    parent::P
+end
+Base.parent(d::Data) = getfield(d, :parent)
+Base.hasproperty(d::Data, x::Symbol) = hasproperty(parent(d), x)
+Base.getproperty(d::Data, x::Symbol) = NamedColumn(x, DataColumn(getproperty(parent(d), x)))
+data(x) = Data(x)
+struct MaybeData{P}
+    parent::P
+end
+Base.parent(d::MaybeData) = getfield(d, :parent)
+Base.hasproperty(d::MaybeData, x::Symbol) = hasproperty(parent(d), x)
+Base.getproperty(d::MaybeData, x::Symbol) = NamedColumn(x, hasproperty(d, x) ? DataColumn(getproperty(parent(d), x)) : MissingColumn())
+maybedata(x) = MaybeData(x)
+abstract type AbstractColumn end
+struct MissingColumn <: AbstractColumn end
+struct DataColumn{P} <: AbstractColumn
+    parent::P
+end
+Base.parent(d::DataColumn) = getfield(d, :parent)
+struct NamedColumn{N,P} <: AbstractColumn
+    name::N
+    parent::P
+end
+name(x::NamedColumn) = getfield(x, :name)
+Base.parent(x::NamedColumn) = getfield(x, :parent)
 
+struct ExprColumn{F,A<:Tuple,K<:NamedTuple} <: AbstractColumn
+    f::F
+    args::A
+    kwargs::K
+    ExprColumn(f, args...; kwargs...) = new{typeof(f),typeof(args),typeof((;kwargs...))}(f,args,(;kwargs...))
+    ExprColumn(f::Type, args...; kwargs...) = new{Type{f},typeof(args),typeof((;kwargs...))}(f,args,(;kwargs...))
+end
+getf(x::ExprColumn) = getfield(x, :f)
+getargs(x::ExprColumn) = getfield(x, :args)
+getargs(x::ExprColumn, n) = (rv = getargs(x); @assert length(rv) == n; rv)
+getargs(::typeof(+), x::ExprColumn{typeof(+)}) = getargs(x)
+getargs(::typeof(+), x::ExprColumn) = (x,)
+getargs(::typeof(+), x) = (x,)
+getkwargs(x::ExprColumn) = getfield(x, :kwargs)
+getop(x) = getf(x)
+getop(::ExprColumn{typeof(doublepipe)}) = :||
+getop(::ExprColumn{typeof(assign)}) = :(=)
 
-# model(__df__) = begin
-#     (; Age, Treatment, Subject, Experimenter, BMI) = data(__df__)
-#     (; performance_mean, performance_sd, Performance) = maybedata(__df__)
-#     (Age_first, Age_second) = (ensurecols)(ploynomial_expand, Age; order=2)
-#     performance_mean = ((maybedists)(; force=isdata(performance_mean)))(1 + Age_first * Treatment + Age_second + ((1 + Treatment) | Subject) + ((1 + Age_first) | Experimenter))
-#     log(performance_sd) = ((maybedists)(; force=isdata(log(performance_sd))))(1 + Age * BMI + (ensurecols)(max, Age, BMI) + ((1 + Age * BMI) | Subject))
-#     Performance = ((maybedists)(; force=isdata(Performance)))(Normal, performance_mean, performance_sd)
-#     BRM(; Age_first, Age_second, Age, performance_mean, Treatment, Subject, Experimenter, performance_sd, BMI, Performance)
-# end
+struct LikelihoodColumn{P,R} <: AbstractColumn
+    parent::P
+    rhs::R
+end
+Base.parent(d::LikelihoodColumn) = getfield(d, :parent)
+rhs(d::LikelihoodColumn) = getfield(d, :rhs)
+maybedists(lhs::AbstractColumn, x::AbstractColumn) = LikelihoodColumn(lhs, x)
+
+struct BRMI{O<:NamedTuple}
+    operations::O
+end
+BRMI(;kwargs...) = BRMI((;kwargs...))
+Base.show(io::IO, (;operations)::BRMI) = begin 
+    print(io, "BRMI:\n")
+    for (key, value::NamedColumn) in pairs(operations)
+        print(io, "  ", key, ": ", parent(value), "\n")
+    end
+end
+Base.show(io::IO, d::DataColumn) = begin
+    print(io, "data (eltype=", eltype(parent(d)), ")")
+end
+Base.show(io::IO, x::ExprColumn{<:Union{typeof.((~,*,+,|,doublepipe,assign))...}}) = begin
+    print(io, "(", )
+    join(io, getargs(x), " $(getop(x)) ")
+    print(io, ")")
+end
+nonemptyjoin(io::IO, iterator, args...; first) = if length(iterator) > 0
+    print(io, first)
+    join(io, iterator, args...)
+end
+Base.show(io::IO, x::ExprColumn) = begin
+    print(io, getf(x), "(", )
+    join(io, getargs(x), ", ")
+    nonemptyjoin(io, ["$key=$value" for (key, value) in pairs(getkwargs(x))], ", "; first="; ")
+    print(io, ")")
+end
+Base.show(io::IO, x::NamedColumn) = print(io, name(x))
+
+end
